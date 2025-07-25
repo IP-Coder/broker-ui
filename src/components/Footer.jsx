@@ -22,7 +22,7 @@ const echo = new Echo({
 });
 
 // Base API endpoint for orders
-const API_URL = "http://localhost/server/public/api/orders";
+const API_URL = "https://16.171.63.155/api/orders";
 
 export default function Footer() {
   const [account, setAccount] = useState(null);
@@ -43,7 +43,7 @@ export default function Footer() {
     let isMounted = true;
     async function fetchAccount() {
       try {
-        const res = await fetch("http://localhost/server/public/api/account", {
+        const res = await fetch("https://16.171.63.155/api/account", {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },

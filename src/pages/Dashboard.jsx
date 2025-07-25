@@ -49,7 +49,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* <Footer reloadTrigger={reloadOpen} /> */}
+      <Footer reloadTrigger={reloadOpen} />
     </div>
   );
 }
