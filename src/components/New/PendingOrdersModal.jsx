@@ -1,0 +1,99 @@
+import React from "react";
+import PropTypes from "prop-types";
+import {
+  X as XIcon,
+  ArrowUp as ArrowUpIcon,
+  ArrowDown as ArrowDownIcon,
+  Clock as ClockIcon,
+} from "lucide-react";
+import { format } from "date-fns";
+
+export default function PendingOrdersModal({ isOpen, onClose, orders }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black bg-opacity-50"
+        onClick={onClose}
+      />
+      <div className="relative bg-[#1A1C1F] rounded-lg shadow-lg overflow-hidden w-full max-w-4xl mx-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+          <h2 className="text-lg font-semibold text-white">Pending Orders</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <XIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="overflow-x-auto max-h-[70vh]">
+          {orders.length === 0 ? (
+            <div className="py-8 text-center text-gray-400">
+              No pending orders
+            </div>
+          ) : (
+            <table className="min-w-full text-sm text-gray-200">
+              <thead className="bg-[#23272F] text-gray-400 uppercase text-xs">
+                <tr>
+                  <th className="py-3 px-4 text-left">Order ID</th>
+                  <th className="py-3 px-4">Placed</th>
+                  <th className="py-3 px-4">Asset</th>
+                  <th className="py-3 px-4">Direction</th>
+                  <th className="py-3 px-4">Volume</th>
+                  <th className="py-3 px-4">Price</th>
+                  <th className="py-3 px-4">S/L</th>
+                  <th className="py-3 px-4">T/P</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((o) => (
+                  <tr key={o.id} className="border-t border-gray-800">
+                    <td className="py-2 px-4 font-medium text-gray-100">
+                      #{o.id}
+                    </td>
+                    <td className="py-2 px-4">
+                      <div className="flex flex-col">
+                        <span>
+                          {format(new Date(o.placed_time), "dd.MM.yyyy")}
+                        </span>
+                        <span className="flex items-center gap-1 text-gray-400 text-xs">
+                          <ClockIcon className="w-4 h-4" />
+                          {format(new Date(o.placed_time), "HH:mm:ss")}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-4 font-medium">{o.symbol}</td>
+                    <td className="py-2 px-4">
+                      <div className="flex items-center gap-1">
+                        {o.side === "buy" ? (
+                          <ArrowUpIcon className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <ArrowDownIcon className="w-4 h-4 text-red-400" />
+                        )}
+                        <span
+                          className={
+                            o.side === "buy" ? "text-green-400" : "text-red-400"
+                          }
+                        >
+                          {o.side.charAt(0).toUpperCase() + o.side.slice(1)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-4">{o.volume}</td>
+                    <td className="py-2 px-4">${Number(o.price).toFixed(5)}</td>
+                    <td className="py-2 px-4">{o.stopLoss}</td>
+                    <td className="py-2 px-4">{o.takeProfit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+PendingOrdersModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  orders: PropTypes.array.isRequired,
+};

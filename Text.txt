@@ -1,0 +1,444 @@
+
+import React, { useEffect, useRef, useState } from "react";
+import Pusher from "pusher-js";
+
+// Helper for asset categories
+const getCategory = (symbolObj) => {
+  if (!symbolObj) return "Currencies";
+  const symbol = symbolObj.symbol || symbolObj.SYMBOL;
+  if (
+    /BTC|ETH|USDT|XRP|ADA|DOGE|SOL|LTC|BCH|XMR|XLM|DASH|LINK|UNI|MATIC|AVAX|FIL|TRX|NEO|ATOM|ALGO|VET|AAVE|1INCH|SAND|GALA|FLOW|CHZ|COMP|CRV|DYDX|ENJ|EOS|GRT|ICX|REP|XEM|XTZ|ZEC|ZEN|ZRX|OMG|RUNE|QNT|FET|INJ|ARB/i.test(
+      symbol
+    )
+  )
+    return "Cryptocurrencies";
+  if (
+    /XAU|XAG|XPT|XPD|OIL|GOLD|SILVER|PLATINUM|PALLADIUM|WTI|BRENT/i.test(symbol)
+  )
+    return "Commodities";
+  return "Currencies";
+};
+
+export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
+  const [symbols, setSymbols] = useState([]);
+  const [tab, setTab] = useState("Currencies");
+  const [favourites, setFavourites] = useState([]);
+  const [search, setSearch] = useState("");
+  const chipRowRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // 1) Initial load of symbols + first quotes snapshot
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // a) fetch symbols
+        const symRes = await fetch(
+          "http://localhost/PaperTrade/Broker/public/api/symbols"
+        );
+        const { symbols: rawSyms = [] } = await symRes.json();
+        const normalized = rawSyms.map((s) => ({
+          id: s.id,
+          symbol: s.symbol,
+          title: s.title,
+          decimals: s.decimals,
+          base_title: s.base_title,
+          quote_title: s.quote_title,
+        }));
+
+        // b) fetch first quotes
+        const list = normalized.map((s) => s.symbol).join(",");
+        const qRes = await fetch(
+          `http://localhost/PaperTrade/Broker/public/api/quote?symbols=${list}`
+        );
+        const qJson = await qRes.json();
+
+        if (qJson.status !== "success" || !Array.isArray(qJson.data)) {
+          // fallback: null values
+          return setSymbols(
+            normalized.map((s) => ({
+              ...s,
+              price: null,
+              changePercent: null,
+              direction: "same",
+              initialPrice: null,
+            }))
+          );
+        }
+
+        // build map of first/last/high/low
+        const map = {};
+        qJson.data.forEach((q) => {
+          const sym = q.SYMBOL;
+          const bid = parseFloat(q.BID),
+            ask = parseFloat(q.ASK),
+            mid = (bid + ask) / 2,
+            ts = Number(q.TIMESTAMP);
+
+          if (!map[sym]) {
+            map[sym] = {
+              firstMid: mid,
+              firstTs: ts,
+              lastMid: mid,
+              lastTs: ts,
+              high: mid,
+              low: mid,
+            };
+          } else {
+            const e = map[sym];
+            e.high = Math.max(e.high, mid);
+            e.low = Math.min(e.low, mid);
+            if (ts < e.firstTs) {
+              e.firstTs = ts;
+              e.firstMid = mid;
+            }
+            if (ts > e.lastTs) {
+              e.lastTs = ts;
+              e.lastMid = mid;
+            }
+          }
+        });
+
+        // merge into state with an initialPrice snapshot
+        const merged = normalized.map((s) => {
+          const e = map[s.symbol];
+          if (!e)
+            return {
+              ...s,
+              price: null,
+              changePercent: null,
+              direction: "same",
+              initialPrice: null,
+            };
+
+          const initialPrice = e.firstMid;
+          return {
+            ...s,
+            initialPrice,
+            price: e.lastMid,
+            changePercent: 0,
+            high: e.high,
+            low: e.low,
+            direction: "same",
+          };
+        });
+
+        setSymbols(merged);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // 2) Real-time updates via Pusher
+  useEffect(() => {
+    if (symbols.length === 0) return;
+
+    const pusher = new Pusher(import.meta.env.VITE_PUSHER_KEY, {
+      cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+      encrypted: true,
+    });
+
+    const channel = pusher.subscribe("quotes");
+    channel.bind("QuoteUpdated", ({ quotes }) => {
+      setSymbols((prev) =>
+        prev.map((s) => {
+          const q = quotes[s.symbol];
+          if (!q) return s;
+
+          const bid = parseFloat(q.BID),
+            ask = parseFloat(q.ASK),
+            mid = (bid + ask) / 2;
+
+          // direction relative to previous price
+
+          const direction =
+            s.price != null
+              ? mid > s.initialPrice
+                ? "up"
+                : mid < s.initialPrice
+                ? "down"
+                : "same"
+              : "same";
+
+          // percent change relative to initial snapshot
+          const changePercent =
+            s.initialPrice != null
+              ? ((mid - s.initialPrice) / s.initialPrice) * 100
+              : null;
+
+          return {
+            ...s,
+            price: mid,
+            changePercent,
+            direction,
+            high: s.high != null ? Math.max(s.high, mid) : mid,
+            low: s.low != null ? Math.min(s.low, mid) : mid,
+          };
+        })
+      );
+    });
+
+    return () => {
+      channel.unbind_all();
+      pusher.unsubscribe("quotes");
+      pusher.disconnect();
+    };
+  }, [symbols.length]);
+
+  // 3) Load user favorites
+  useEffect(() => {
+    if (!user) return;
+    fetch("http://localhost/PaperTrade/Broker/public/api/favorites", {
+      headers: { Authorization: `Bearer ${user.token}` },
+    })
+      .then((r) => r.json())
+      .then((r) => setFavourites(r.favorites?.map((f) => f.symbol) || []));
+  }, [user]);
+
+  // 4) Toggle favourite
+  const toggleFavourite = async (symbol) => {
+    if (!user) return;
+    const isFav = favourites.includes(symbol);
+    const newFavs = isFav
+      ? favourites.filter((f) => f !== symbol)
+      : [...favourites, symbol];
+    setFavourites(newFavs);
+
+    try {
+      await fetch(
+        `http://localhost/PaperTrade/Broker/public/api/favorites${
+          isFav ? `/${symbol}` : ""
+        }`,
+        {
+          method: isFav ? "DELETE" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: isFav ? undefined : JSON.stringify({ symbol }),
+        }
+      );
+    } catch {
+      setFavourites(favourites);
+    }
+  };
+
+  // ... rest of the component (categorization, filtering, UI) unchanged
+
+  const categorized = {
+    Favourites: symbols.filter((s) => favourites.includes(s.symbol)),
+    Currencies: symbols.filter((s) => getCategory(s) === "Currencies"),
+    Commodities: symbols.filter((s) => getCategory(s) === "Commodities"),
+    Cryptocurrencies: symbols.filter(
+      (s) => getCategory(s) === "Cryptocurrencies"
+    ),
+  };
+
+  const filtered = (categorized[tab] || []).filter((s) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      s.title.toLowerCase().includes(q) ||
+      (s.base_title || "").toLowerCase().includes(q) ||
+      (s.quote_title || "").toLowerCase().includes(q)
+    );
+  });
+
+  // scroll logic unchanged
+  const scrollChips = (dir) => {
+    chipRowRef.current?.scrollBy({
+      left: dir === "left" ? -120 : 120,
+      behavior: "smooth",
+    });
+  };
+  const checkArrows = () => {
+    const row = chipRowRef.current;
+    if (!row) return;
+    setCanScrollLeft(row.scrollLeft > 0);
+    setCanScrollRight(row.scrollLeft < row.scrollWidth - row.clientWidth - 1);
+  };
+  useEffect(() => {
+    checkArrows();
+    const row = chipRowRef.current;
+    row?.addEventListener("scroll", checkArrows);
+    window.addEventListener("resize", checkArrows);
+    return () => {
+      row?.removeEventListener("scroll", checkArrows);
+      window.removeEventListener("resize", checkArrows);
+    };
+  }, [tab]);
+
+  return (
+    <aside className="bg-[#222733] p-4 border-r border-gray-800 flex flex-col">
+      {/* Search */}
+      <div className="flex items-center mb-3">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search assets"
+          className="w-full bg-[#23272F] text-sm text-white px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {/* Tabs */}
+      <div className="relative mb-3 flex items-center">
+        {canScrollLeft && (
+          <button
+            onClick={() => scrollChips("left")}
+            className="absolute left-0 z-10 bg-[#222733] rounded-full shadow px-1 py-1 h-7 flex items-center justify-center"
+            style={{ transform: "translateY(-1px)" }}
+            aria-label="Scroll Left"
+          >
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
+              <path
+                d="M15 18l-6-6 6-6"
+                stroke="#fff"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+        <div
+          ref={chipRowRef}
+          className="flex gap-2 overflow-x-auto scrollbar-hide pl-7 pr-7"
+          style={{
+            scrollBehavior: "smooth",
+            msOverflowStyle: "none",
+            scrollbarWidth: "none",
+          }}
+        >
+          {["Favourites", "Currencies", "Commodities", "Cryptocurrencies"].map(
+            (cat) => (
+              <button
+                key={cat}
+                onClick={() => setTab(cat)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap transition ${
+                  tab === cat
+                    ? "bg-white text-[#222733] border-blue-400"
+                    : "bg-[#1A1F27] text-gray-300 border-transparent hover:border-gray-600"
+                }`}
+              >
+                {cat}
+              </button>
+            )
+          )}
+        </div>
+        {canScrollRight && (
+          <button
+            onClick={() => scrollChips("right")}
+            className="absolute right-0 z-10 bg-[#222733] rounded-full shadow px-1 py-1 h-7 flex items-center justify-center"
+            style={{ transform: "translateY(-1px)" }}
+            aria-label="Scroll Right"
+          >
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
+              <path
+                d="M9 6l6 6-6 6"
+                stroke="#fff"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Table Header */}
+      <div className="flex text-sm text-gray-300 font-semibold pb-3 border-b border-[#23272F] gap-4">
+        <span className="w-2/6">Asset Name</span>
+        <span className="w-1/6 text-right">Price</span>
+        <span className="w-1/6 text-right">Change</span>
+        <span className="w-2/6 text-right">High/Low</span>
+        <span className="w-1/6 text-right">Fav</span>
+      </div>
+
+      {/* Rows */}
+      <ul className="flex-1 overflow-y-auto divide-y divide-[#23272F]">
+        {filtered.length === 0 ? (
+          <li className="text-center text-gray-500 py-6">No assets found</li>
+        ) : (
+          filtered.map((asset) => {
+            const isFav = favourites.includes(asset.symbol);
+            return (
+              <li
+                key={asset.symbol}
+                className={`flex items-center gap-3 py-3 px-2 rounded-sm cursor-pointer ${
+                  selectedSymbol === asset.symbol
+                    ? "bg-[#2949ff33]"
+                    : "hover:bg-[#1E2A47]"
+                }`}
+                onClick={() => onSelectSymbol(asset.symbol)}
+              >
+                <span className="w-2/6 text-white text-sm font-medium truncate">
+                  {asset.title}
+                </span>
+                <span className="w-1/6 text-right text-gray-200 text-sm">
+                  {asset.price != null
+                    ? asset.price.toFixed(asset.decimals ?? 5)
+                    : "--"}
+                </span>
+                <span
+                  className={`w-1/6 flex justify-end items-center text-sm ${
+                    asset.direction === "up"
+                      ? "text-green-500"
+                      : asset.direction === "down"
+                      ? "text-red-500"
+                      : "text-gray-200"
+                  }`}
+                >
+                  {asset.changePercent != null
+                    ? `${asset.changePercent.toFixed(2)}%`
+                    : "--"}
+                </span>
+                <span className="w-2/6 text-right text-gray-400 text-sm truncate">
+                  {asset.high != null && asset.low != null
+                    ? `${asset.high.toFixed(
+                        asset.decimals ?? 5
+                      )}/${asset.low.toFixed(asset.decimals ?? 5)}`
+                    : "--/--"}
+                </span>
+                <button
+                  className="w-1/6 flex justify-end"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavourite(asset.symbol);
+                  }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 20 20"
+                    fill={isFav ? "#FBBF24" : "none"}
+                    stroke="#FBBF24"
+                    strokeWidth="1.5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1
+                         0 00.95.69h4.18c.969 0 1.371 1.24.588 1.81l-3.385
+                         2.46a1 1 0 00-.364 1.118l1.287
+                         3.965c.3.921-.755 1.688-1.538
+                         1.118l-3.386-2.46a1 1 0
+                         00-1.175 0l-3.386 2.46c-.782.57-1.838-.197-1.538-1.118
+                         l1.287-3.965a1 1 0
+                         00-.364-1.118l-3.385-2.46c
+                         -.783-.570-.38-1.81.588-1.81h4.18a1 1 0
+                         00.950-.690l1.286-3.966z"
+                    />
+                  </svg>
+                </button>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </aside>
+  );
+}
