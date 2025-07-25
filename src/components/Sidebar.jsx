@@ -35,7 +35,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     (async () => {
       try {
         // Fetch and initialize symbol state
-        const res = await fetch("http://16.171.63.155/api/symbols");
+        const res = await fetch("https://16.171.63.155/api/symbols");
         const { symbols: raw = [] } = await res.json();
         const mapped = raw.map((s) => ({
           ...s,
@@ -153,7 +153,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     if (!user) return;
     (async () => {
       try {
-        const res = await fetch("http://16.171.63.155/api/favorites", {
+        const res = await fetch("https://16.171.63.155/api/favorites", {
           headers: { Authorization: `Bearer ${user.token}` },
         });
         const { favorites = [] } = await res.json();
@@ -174,7 +174,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     setFavourites(updated);
     try {
       await fetch(
-        `http://16.171.63.155/api/favorites${isFav ? `/${symbol}` : ""}`,
+        `https://16.171.63.155/api/favorites${isFav ? `/${symbol}` : ""}`,
         {
           method: isFav ? "DELETE" : "POST",
           headers: {
