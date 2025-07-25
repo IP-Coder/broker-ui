@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost/server/public/api', // Adjust if deployed elsewhere
+  baseURL: 'https://16.171.63.155/api', // Adjust if deployed elsewhere
 });
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
