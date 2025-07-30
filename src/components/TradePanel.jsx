@@ -128,7 +128,7 @@ export default function TradePanel({
   // conversion helper
   async function convertCurrency(amount, from) {
     const to = "USD";
-    const url = `http://api.forexfeed.net/convert/${FOREXFEED_APP_ID}/${amount}/${from}/${to}`;
+    const url = `https://api.forexfeed.net/convert/${FOREXFEED_APP_ID}/${amount}/${from}/${to}`;
     const res = await fetch(url);
     const text = await res.text();
     const lines = text.split("\n").map((l) => l.trim());
