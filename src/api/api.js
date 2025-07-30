@@ -4,7 +4,7 @@ import axios from 'axios';
  * Centralized Axios instance with baseURL, JSON headers, and auth interceptor.
  */
 const api = axios.create({
-  baseURL: 'http://localhost/server/public/api',
+  baseURL: 'https://api.binaryprofunding.net/api',
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 });

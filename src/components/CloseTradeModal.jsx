@@ -43,7 +43,7 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
     setSubmitting(true);
     try {
       const res = await fetch(
-        `http://localhost/server/public/api/order/close`,
+        `https://api.binaryprofunding.net/api/order/close`,
         {
           method: "POST",
           headers: {

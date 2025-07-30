@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { HiChevronUp, HiChevronDown } from "react-icons/hi";
 
-const API_BASE_URL = "https://16.171.63.155/api";
+const API_BASE_URL = "https://api.binaryprofunding.net/api";
 const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID; // ← your APP ID
 
 // Map first three letters of the symbol to a flag SVG

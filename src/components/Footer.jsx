@@ -22,7 +22,7 @@ const echo = new Echo({
 });
 
 // Base API endpoint for orders
-const API_URL = "https://16.171.63.155/api/orders";
+const API_URL = "https://api.binaryprofunding.net/api/orders";
 
 export default function Footer() {
   const [account, setAccount] = useState(null);
@@ -43,11 +43,14 @@ export default function Footer() {
     let isMounted = true;
     async function fetchAccount() {
       try {
-        const res = await fetch("https://16.171.63.155/api/account", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
+        const res = await fetch(
+          "https://api.binaryprofunding.net/api/account",
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
         const json = await res.json();
         if (json.status === "success" && json.account) {
           isMounted && setAccount(json.account);
