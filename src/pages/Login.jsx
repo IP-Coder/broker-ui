@@ -17,7 +17,9 @@ export default function Login() {
       if (data.token) {
         localStorage.removeItem("token");
         localStorage.setItem("token", data.token);
-        navigate("/dashboard");
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 100);
       }
     } catch {
       setError("Invalid credentials. Please try again.");
