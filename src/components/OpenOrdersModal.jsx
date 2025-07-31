@@ -1,5 +1,5 @@
 // src/components/OpenOrdersModal.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import StopLossTakeProfitModal from "./StopLossTakeProfitModal";
 import CloseTradeModal from "./CloseTradeModal";
 import {
@@ -10,9 +10,37 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function OpenOrdersModal({ isOpen, onClose, orders }) {
+const API_URL = "https://api.binaryprofunding.net/api/orders";
+
+export default function OpenOrdersModal({ isOpen, onClose }) {
+  const [orders, setOrders] = useState([]);
   const [slTp, setSlTp] = useState(null);
   const [closeO, setCloseO] = useState(null);
+
+  // fetch open orders each time the modal opens
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchOrders() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}?status=open`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (isMounted) {
+          setOrders(data.orders || []);
+        }
+      } catch (err) {
+        console.error("Open orders fetch error:", err);
+      }
+    }
+    if (isOpen) {
+      fetchOrders();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -177,7 +205,7 @@ export default function OpenOrdersModal({ isOpen, onClose, orders }) {
           <CloseTradeModal
             position={closeO}
             onClose={() => setCloseO(null)}
-            onClosed={(id) => setCloseO(null)}
+            onClosed={() => setCloseO(null)}
           />
         )}
       </div>

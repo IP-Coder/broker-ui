@@ -1,5 +1,5 @@
 // src/components/PendingOrdersModal.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   X as XIcon,
   ArrowUp as ArrowUpIcon,
@@ -8,8 +8,36 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function PendingOrdersModal({ isOpen, onClose, orders }) {
-  // Always call hooks (none here) before conditional return
+const API_URL = "https://api.binaryprofunding.net/api/orders";
+
+export default function PendingOrdersModal({ isOpen, onClose }) {
+  const [orders, setOrders] = useState([]);
+
+  // fetch pending orders each time modal opens
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchOrders() {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_URL}?status=pending`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (isMounted) {
+          setOrders(data.orders || []);
+        }
+      } catch (err) {
+        console.error("Pending orders fetch error:", err);
+      }
+    }
+    if (isOpen) {
+      fetchOrders();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const mapped = orders.map((o) => ({

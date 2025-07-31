@@ -21,17 +21,9 @@ const echo = new Echo({
   },
 });
 
-// Base API endpoint for orders
-const API_URL = "https://api.binaryprofunding.net/api/orders";
-
 export default function Footer() {
   const [account, setAccount] = useState(null);
   const [loadingAccount, setLoadingAccount] = useState(true);
-
-  // Orders state
-  const [pendingOrders, setPendingOrders] = useState([]);
-  const [openOrders, setOpenOrders] = useState([]);
-  const [historyOrders, setHistoryOrders] = useState([]);
 
   // Modal visibility
   const [showPending, setShowPending] = useState(false);
@@ -54,8 +46,6 @@ export default function Footer() {
         const json = await res.json();
         if (json.status === "success" && json.account) {
           isMounted && setAccount(json.account);
-        } else {
-          throw new Error("No account data");
         }
       } catch (err) {
         console.error("Account load error:", err);
@@ -69,59 +59,19 @@ export default function Footer() {
     };
   }, []);
 
-  // 2) Fetch orders once account is loaded
-  useEffect(() => {
-    if (!account?.user_id) return;
-    let isMounted = true;
-    const token = localStorage.getItem("token");
-    console.log(token);
-
-    Promise.all(
-      ["pending", "open", "closed"].map((status) =>
-        fetch(`${API_URL}?status=${status}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((res) => res.text()) // get raw text
-          .then((body) => {
-            console.log(`\n–– RAW [${status}] ––\n`, body); // dump whatever it is
-            try {
-              return JSON.parse(body); // try to parse JSON
-            } catch {
-              console.warn(`Response for "${status}" wasn't JSON.`);
-              return { orders: [] }; // fallback
-            }
-          })
-      )
-    )
-      .then(([pRes, oRes, hRes]) => {
-        if (!isMounted) return;
-        setPendingOrders(pRes.orders || []);
-        setOpenOrders(oRes.orders || []);
-        setHistoryOrders(hRes.orders || []);
-      })
-      .catch((err) => console.error("Orders fetch error:", err));
-
-    return () => {
-      isMounted = false;
-    };
-  }, [account?.user_id]);
-
-  // 3) Real-time updates via Echo
+  // 2) Real-time updates via Echo (still in Footer)
   useEffect(() => {
     if (!account?.user_id) return;
     const channel = echo.private(`account.${account.user_id}`);
     channel.listen("OrderPendingCreated", (payload) => {
-      setPendingOrders((prev) => [payload, ...prev]);
+      // you can handle real-time events here or inside modals as desired
     });
     channel.listen("OrderOpened", (payload) => {
-      setOpenOrders((prev) => [payload, ...prev]);
-      setPendingOrders((prev) => prev.filter((o) => o.id !== payload.id));
+      //
     });
     channel.listen("OrderClosed", (payload) => {
-      setHistoryOrders((prev) => [payload, ...prev]);
-      setOpenOrders((prev) => prev.filter((o) => o.id !== payload.id));
+      //
     });
-
     return () => {
       channel.stopListening("OrderPendingCreated");
       channel.stopListening("OrderOpened");
@@ -130,7 +80,7 @@ export default function Footer() {
     };
   }, [account?.user_id]);
 
-  // Format helpers
+  // Format helpers (unchanged)
   const fmtAmt = (n) =>
     loadingAccount || n == null ? "---" : `$${Number(n).toFixed(2)}`;
   const fmtPct = (n) =>
@@ -212,17 +162,11 @@ export default function Footer() {
       <PendingOrdersModal
         isOpen={showPending}
         onClose={() => setShowPending(false)}
-        orders={pendingOrders}
       />
-      <OpenOrdersModal
-        isOpen={showOpen}
-        onClose={() => setShowOpen(false)}
-        orders={openOrders}
-      />
+      <OpenOrdersModal isOpen={showOpen} onClose={() => setShowOpen(false)} />
       <TradeHistoryModal
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
-        orders={historyOrders}
       />
     </>
   );
