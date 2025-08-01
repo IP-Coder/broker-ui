@@ -1,5 +1,7 @@
 // src/components/OpenOrdersModal.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
 import StopLossTakeProfitModal from "./StopLossTakeProfitModal";
 import CloseTradeModal from "./CloseTradeModal";
 import {
@@ -12,12 +14,20 @@ import { format } from "date-fns";
 
 const API_URL = "https://api.binaryprofunding.net/api/orders";
 
+// expose Pusher for Echo
+window.Pusher = Pusher;
+
 export default function OpenOrdersModal({ isOpen, onClose }) {
+  // ─── State & Refs ──────────────────────────────────────────────
   const [orders, setOrders] = useState([]);
   const [slTp, setSlTp] = useState(null);
   const [closeO, setCloseO] = useState(null);
+  const [liveTicks, setLiveTicks] = useState({}); // { SYMBOL: { bid, ask } }
 
-  // fetch open orders each time the modal opens
+  const echoRef = useRef(null);
+  const tickChannelsRef = useRef([]);
+
+  // ─── 1️⃣ Fetch open orders each time the modal opens ───────────
   useEffect(() => {
     let isMounted = true;
     async function fetchOrders() {
@@ -27,50 +37,108 @@ export default function OpenOrdersModal({ isOpen, onClose }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (isMounted) {
-          setOrders(data.orders || []);
-        }
+        if (isMounted) setOrders(data.orders || []);
       } catch (err) {
         console.error("Open orders fetch error:", err);
       }
     }
-    if (isOpen) {
-      fetchOrders();
-    }
+    if (isOpen) fetchOrders();
     return () => {
       isMounted = false;
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
-  const mapped = orders.map((o) => {
-    const distance =
-      o.live_price != null
-        ? (
-            (parseFloat(o.live_price) - parseFloat(o.open_price)) *
-            10000 *
-            (o.type === "sell" ? -1 : 1)
-          ).toFixed(2)
-        : "---";
-    const profit =
-      o.floating_profit_loss != null
-        ? (o.floating_profit_loss * 100000 * parseFloat(o.volume)).toFixed(2)
-        : "---";
-
-    return {
-      id: o.id,
-      open_time: o.open_time,
-      symbol: o.symbol,
-      type: o.type,
-      volume: o.volume,
-      open_price: o.open_price,
-      current_price: o.live_price ?? "---",
-      distance,
-      swap: o.swap_cost ?? "0.00",
-      profit,
+  // ─── 2️⃣ Initialize Echo/Pusher once ───────────────────────────
+  useEffect(() => {
+    Pusher.logToConsole = false;
+    echoRef.current = new Echo({
+      broadcaster: "pusher",
+      key: import.meta.env.VITE_PUSHER_KEY,
+      cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+      forceTLS: true,
+      disableStats: true,
+    });
+    return () => {
+      echoRef.current.disconnect();
     };
-  });
+  }, []);
+
+  // ─── 3️⃣ Subscribe to each order’s tick channel whenever orders change ─────────
+  useEffect(() => {
+    const echo = echoRef.current;
+    if (!echo) return;
+
+    // tear down old subs
+    tickChannelsRef.current.forEach((ch) => {
+      ch.stopListening(".tick.update");
+      echo.leaveChannel(ch.name);
+    });
+    tickChannelsRef.current = [];
+
+    // resubscribe
+    orders.forEach((o) => {
+      const safe = o.symbol.replace(":", "_");
+      const channel = echo
+        .channel(`market.tick.OANDA_${safe}`)
+        .listen(".tick.update", (data) => {
+          const incoming = data.symbol.replace("OANDA:", "");
+          setLiveTicks((prev) => ({
+            ...prev,
+            [incoming]: {
+              bid: parseFloat(data.bid),
+              ask: parseFloat(data.ask),
+            },
+          }));
+        });
+      tickChannelsRef.current.push(channel);
+    });
+  }, [orders]);
+
+  // ─── 4️⃣ Prepare your “mapped” rows — this hook **always** runs ───────
+  const mapped = useMemo(
+    () =>
+      orders.map((o) => {
+        const ticks = liveTicks[o.symbol] || {};
+        const current =
+          ticks[o.type === "buy" ? "bid" : "ask"] ?? parseFloat(o.live_price);
+
+        const distance =
+          o.open_price && current
+            ? (
+                (current - parseFloat(o.open_price)) *
+                10000 *
+                (o.type === "sell" ? -1 : 1)
+              ).toFixed(2)
+            : "---";
+
+        const profit =
+          o.volume && current
+            ? (
+                (current - parseFloat(o.open_price)) *
+                100000 *
+                parseFloat(o.volume) *
+                (o.type === "sell" ? -1 : 1)
+              ).toFixed(2)
+            : "---";
+
+        return {
+          id: o.id,
+          open_time: o.open_time,
+          symbol: o.symbol,
+          type: o.type,
+          volume: o.volume,
+          open_price: parseFloat(o.open_price).toFixed(5),
+          current_price: current != null ? current.toFixed(5) : "---",
+          distance,
+          swap: parseFloat(o.swap_cost || 0).toFixed(2),
+          profit,
+        };
+      }),
+    [orders, liveTicks]
+  );
+
+  // ─── 5️⃣ Only gate the render output, never the hooks! ─────────────
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -175,7 +243,7 @@ export default function OpenOrdersModal({ isOpen, onClose }) {
                         }`}
                       >
                         {parseFloat(o.profit) >= 0
-                          ? `$${o.profit}`
+                          ? `+$${o.profit}`
                           : `-$${Math.abs(o.profit)}`}
                       </span>
                     </td>

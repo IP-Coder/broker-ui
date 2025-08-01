@@ -1,7 +1,9 @@
 // src/components/TradePanel.jsx
-import React, { useState, useEffect, useMemo } from "react";
-import { HiChevronUp, HiChevronDown } from "react-icons/hi";
-
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
+// give Echo access to Pusher
+window.Pusher = Pusher;
 const API_BASE_URL = "https://api.binaryprofunding.net/api";
 const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID; // ← your APP ID
 
@@ -46,8 +48,41 @@ export default function TradePanel({
   const [tpPrice, setTpPrice] = useState(0);
 
   // dummy bid/ask
-  const sellPrice = 1.17163;
-  const buyPrice = 1.1717;
+  // real-time bid/ask
+  const [bidPrice, setBidPrice] = useState(null);
+  const [askPrice, setAskPrice] = useState(null);
+  const echoRef = useRef(null);
+
+  // subscribe to tick updates for this symbol
+  useEffect(() => {
+    // init Echo once
+    if (!echoRef.current) {
+      Pusher.logToConsole = false;
+      echoRef.current = new Echo({
+        broadcaster: "pusher",
+        key: import.meta.env.VITE_PUSHER_KEY,
+        cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+        forceTLS: true,
+        disableStats: true,
+      });
+    }
+    const echo = echoRef.current;
+
+    // symbols in OANDA channels are prefixed and use “_” instead of “/”
+    const safe = symbol.replace("/", "").replace(":", "_");
+    const channel = echo.channel(`market.tick.OANDA_${safe}`);
+
+    const listener = channel.listen(".tick.update", (data) => {
+      // data.bid and data.ask come as strings
+      setBidPrice(parseFloat(data.bid));
+      setAskPrice(parseFloat(data.ask));
+    });
+
+    return () => {
+      channel.stopListening(".tick.update");
+      echo.leaveChannel(`market.tick.OANDA_${safe}`);
+    };
+  }, [symbol]);
 
   // computed metrics
   const lotSizeUnits = useMemo(() => tradeSize * 100000, [tradeSize]);
@@ -56,8 +91,8 @@ export default function TradePanel({
     [tradeSize]
   );
   const spread = useMemo(
-    () => ((buyPrice - sellPrice) * PIP_FACTOR).toFixed(1),
-    [buyPrice, sellPrice]
+    () => ((bidPrice - askPrice) * PIP_FACTOR).toFixed(1),
+    [bidPrice, askPrice]
   );
 
   // Profit displays
@@ -111,7 +146,7 @@ export default function TradePanel({
   // default atPrice & initial SL/TP when pending is toggled on
   useEffect(() => {
     if (pending && side) {
-      const entry = side === "buy" ? buyPrice : sellPrice;
+      const entry = side === "buy" ? bidPrice : askPrice;
       setAtPrice(entry.toFixed(5));
 
       // initial 50 pips => ±$5 or –$5
@@ -123,7 +158,7 @@ export default function TradePanel({
       setSlPrice(sl.toFixed(5));
       setTpPrice(tp.toFixed(5));
     }
-  }, [pending, side, buyPrice, sellPrice]);
+  }, [pending, side, bidPrice, askPrice]);
 
   // conversion helper
   async function convertCurrency(amount, from) {
@@ -345,7 +380,10 @@ export default function TradePanel({
               }`}
             >
               <div className="text-sm font-bold">SELL</div>
-              <div className="text-lg font-mono">{sellPrice.toFixed(5)}</div>
+              <div className="text-lg font-mono">
+                {" "}
+                {bidPrice != null ? bidPrice.toFixed(5) : "--"}
+              </div>
             </button>
             <button
               onClick={() => setSide("buy")}
@@ -356,7 +394,10 @@ export default function TradePanel({
               } relative`}
             >
               <div className="text-sm font-bold">BUY</div>
-              <div className="text-lg font-mono">{buyPrice.toFixed(5)}</div>
+              <div className="text-lg font-mono">
+                {" "}
+                {askPrice != null ? askPrice.toFixed(5) : "--"}
+              </div>
               <div
                 className="absolute top-0 right-0 w-0 h-0
                               border-t-[12px] border-l-[12px]
