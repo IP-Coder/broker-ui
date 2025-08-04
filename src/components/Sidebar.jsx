@@ -94,6 +94,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     init !== null ? ((mid - init) / init) * 100 : null;
                   return {
                     ...a,
+                    price: mid,
                     initialPrice: init,
                     direction: dir,
                     changePercent: pct,
@@ -118,7 +119,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     ? a
                     : {
                         ...a,
-                        price: data.bid,
+
                         ask: data.ask,
                         bid: data.bid,
                         askSize: data.ask_size ?? data.askSize,
