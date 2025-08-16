@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import TradePanel from "../components/TradePanel";
 import ChartPanel from "../components/ChartPanel";
-import OpenPositions from "../components/OpenPositions";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 

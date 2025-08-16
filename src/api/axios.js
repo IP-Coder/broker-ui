@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api.binaryprofunding.net/api', // Adjust if deployed elsewhere
+  baseURL: import.meta.env.VITE_API_URL, // Adjust if deployed elsewhere
 });
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

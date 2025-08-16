@@ -35,14 +35,11 @@ export default function Footer() {
     let isMounted = true;
     async function fetchAccount() {
       try {
-        const res = await fetch(
-          "https://api.binaryprofunding.net/api/account",
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/account`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
         const json = await res.json();
         if (json.status === "success" && json.account) {
           isMounted && setAccount(json.account);

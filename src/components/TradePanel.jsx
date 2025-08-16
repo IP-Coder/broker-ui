@@ -1,13 +1,10 @@
 // src/components/TradePanel.jsx
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import Echo from "laravel-echo";
-import Pusher from "pusher-js";
-// give Echo access to Pusher
-window.Pusher = Pusher;
-const API_BASE_URL = "https://api.binaryprofunding.net/api";
-const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID; // ← your APP ID
+import React, { useState, useEffect, useMemo } from "react";
+import { socket } from "../socketClient"; // ✅ Socket.IO client
 
-// Map first three letters of the symbol to a flag SVG
+const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID;
+
+// Helpers
 const getFlagUrl = (symbol) => {
   if (symbol.startsWith("EUR")) return "/flags/eur.svg";
   if (symbol.startsWith("USD")) return "/flags/usd.svg";
@@ -15,9 +12,9 @@ const getFlagUrl = (symbol) => {
   return "/flags/usd.svg";
 };
 
-// pip constants
-const PIP_VALUE_PER_LOT = 0.1; // $ per pip for 1 standard lot
-const PIP_FACTOR = 10000; // for 4-decimals pairs like EUR/USD
+// 1 pip = 0.0001 for EURUSD
+const PIP_VALUE_PER_LOT = 0.1;
+const PIP_FACTOR = 10000;
 const ONE_PIP = 1 / PIP_FACTOR;
 
 export default function TradePanel({
@@ -27,19 +24,17 @@ export default function TradePanel({
 }) {
   const [tab, setTab] = useState("Market execution");
   const [tradeSize, setTradeSize] = useState(0.01);
-  const [side, setSide] = useState(""); // "buy" or "sell"
+  const [side, setSide] = useState("");
   const [pending, setPending] = useState(false);
   const [atPrice, setAtPrice] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // advanced‐order settings
   const [orderType, setOrderType] = useState("Buy Limit");
   const [expiryEnabled, setExpiryEnabled] = useState(true);
   const [expiry, setExpiry] = useState(new Date().toISOString().slice(0, 16));
 
-  // SL/TP state
   const [useSL, setUseSL] = useState(false);
   const [slPips, setSlPips] = useState(50);
   const [slPrice, setSlPrice] = useState(0);
@@ -47,78 +42,50 @@ export default function TradePanel({
   const [tpPips, setTpPips] = useState(50);
   const [tpPrice, setTpPrice] = useState(0);
 
-  // dummy bid/ask
-  // real-time bid/ask
   const [bidPrice, setBidPrice] = useState(null);
   const [askPrice, setAskPrice] = useState(null);
-  const echoRef = useRef(null);
 
-  // subscribe to tick updates for this symbol
+  const [lotValueUSD, setLotValueUSD] = useState("--");
+  const [requiredMargin, setRequiredMargin] = useState("--");
+
+  // Subscribe to live ticks
   useEffect(() => {
-    // init Echo once
-    if (!echoRef.current) {
-      Pusher.logToConsole = false;
-      echoRef.current = new Echo({
-        broadcaster: "pusher",
-        key: import.meta.env.VITE_PUSHER_KEY,
-        cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-        forceTLS: true,
-        disableStats: true,
-      });
-    }
-    const echo = echoRef.current;
-
-    // symbols in OANDA channels are prefixed and use “_” instead of “/”
-    const safe = symbol.replace("/", "").replace(":", "_");
-    const channel = echo.channel(`market.tick.OANDA_${safe}`);
-
-    const listener = channel.listen(".tick.update", (data) => {
-      // data.bid and data.ask come as strings
-      setBidPrice(parseFloat(data.bid));
-      setAskPrice(parseFloat(data.ask));
-    });
-
-    return () => {
-      channel.stopListening(".tick.update");
-      echo.leaveChannel(`market.tick.OANDA_${safe}`);
+    const handleTick = (data) => {
+      const incoming = data.code?.replace("OANDA:", "");
+      if (incoming !== symbol) return;
+      if (data.bid) setBidPrice(parseFloat(data.bid));
+      if (data.ask) setAskPrice(parseFloat(data.ask));
     };
+    socket.on("tick", handleTick);
+    return () => socket.off("tick", handleTick);
   }, [symbol]);
 
-  // computed metrics
   const lotSizeUnits = useMemo(() => tradeSize * 100000, [tradeSize]);
   const pipValue = useMemo(
     () => (tradeSize * PIP_VALUE_PER_LOT).toFixed(2),
     [tradeSize]
   );
-  const spread = useMemo(
-    () => ((bidPrice - askPrice) * PIP_FACTOR).toFixed(1),
-    [bidPrice, askPrice]
-  );
+  const spread = useMemo(() => {
+    if (bidPrice == null || askPrice == null) return "--";
+    return ((askPrice - bidPrice) * PIP_FACTOR).toFixed(1);
+  }, [bidPrice, askPrice]);
 
-  // Profit displays
-  const slProfit = useMemo(() => {
-    if (!useSL || !atPrice || !slPrice) return "--";
-    const diff =
-      side === "buy"
-        ? parseFloat(atPrice) - slPrice
-        : slPrice - parseFloat(atPrice);
-    const profit = diff * PIP_FACTOR * PIP_VALUE_PER_LOT * tradeSize;
-    return `${profit >= 0 ? "-" : ""}$${profit.toFixed(2)}`;
-  }, [useSL, atPrice, slPrice, side, tradeSize]);
+  // Auto‐set entry, SL & TP whenever side or pip inputs change
+  useEffect(() => {
+    if (!side || (bidPrice == null && askPrice == null)) return;
+    const entry = side === "buy" ? askPrice : bidPrice;
+    if (!entry) return;
 
-  const tpProfit = useMemo(() => {
-    if (!useTP || !atPrice || !tpPrice) return "--";
-    const diff =
-      side === "buy"
-        ? tpPrice - parseFloat(atPrice)
-        : parseFloat(atPrice) - tpPrice;
-    const profit = diff * PIP_FACTOR * PIP_VALUE_PER_LOT * tradeSize;
-    return `${profit >= 0 ? "+" : ""}$${profit.toFixed(2)}`;
-  }, [useTP, atPrice, tpPrice, side, tradeSize]);
+    setAtPrice(entry.toFixed(5));
+    setSlPrice(
+      (entry + (side === "buy" ? -slPips : slPips) * ONE_PIP).toFixed(5)
+    );
+    setTpPrice(
+      (entry + (side === "buy" ? tpPips : -tpPips) * ONE_PIP).toFixed(5)
+    );
+  }, [side, bidPrice, askPrice, slPips, tpPips]);
 
-  // margin & conversion
-  const [requiredMargin, setRequiredMargin] = useState("--");
-  const [lotValueUSD, setLotValueUSD] = useState("--");
+  // Fetch USD value & required margin
   useEffect(() => {
     let cancelled = false;
     const leverage = 400;
@@ -143,27 +110,9 @@ export default function TradePanel({
     };
   }, [tradeSize, symbol]);
 
-  // default atPrice & initial SL/TP when pending is toggled on
-  useEffect(() => {
-    if (pending && side) {
-      const entry = side === "buy" ? bidPrice : askPrice;
-      setAtPrice(entry.toFixed(5));
-
-      // initial 50 pips => ±$5 or –$5
-      const sl = side === "buy" ? entry - 50 * ONE_PIP : entry + 50 * ONE_PIP;
-      const tp = side === "buy" ? entry + 50 * ONE_PIP : entry - 50 * ONE_PIP;
-
-      setSlPips(50);
-      setTpPips(50);
-      setSlPrice(sl.toFixed(5));
-      setTpPrice(tp.toFixed(5));
-    }
-  }, [pending, side, bidPrice, askPrice]);
-
-  // conversion helper
   async function convertCurrency(amount, from) {
     const to = "USD";
-    const url = `https://api.forexfeed.net/convert/${FOREXFEED_APP_ID}/${amount}/${from}/${to}`;
+    const url = `http://api.forexfeed.net/convert/${FOREXFEED_APP_ID}/${amount}/${from}/${to}`;
     const res = await fetch(url);
     const text = await res.text();
     const lines = text.split("\n").map((l) => l.trim());
@@ -173,10 +122,10 @@ export default function TradePanel({
       const val = parseFloat(lines[start + 1].split(",")[6]);
       if (!isNaN(val)) return val;
     }
-    throw new Error("Conversion data not found");
+    throw new Error("Conversion failed");
   }
 
-  // handlers for two‐way SL
+  // Handlers for SL / TP inputs
   const handleSlPipsChange = (newPips) => {
     setSlPips(newPips);
     if (!atPrice) return;
@@ -194,8 +143,6 @@ export default function TradePanel({
         : (newPrice - parseFloat(atPrice)) * PIP_FACTOR;
     setSlPips(Math.max(0, Math.round(diff)));
   };
-
-  // handlers for two‐way TP
   const handleTpPipsChange = (newPips) => {
     setTpPips(newPips);
     if (!atPrice) return;
@@ -214,13 +161,12 @@ export default function TradePanel({
     setTpPips(Math.max(0, Math.round(diff)));
   };
 
-  // build order payload
   const derivedOrderType = useMemo(() => {
-    if (tab === "Market execution") return "market";
-    const parts = orderType.split(" ");
-    return parts[1].toLowerCase(); // "limit" or "stop"
-  }, [tab, orderType]);
-  // build payload for API
+    if (!pending) return "market"; // ✅ Only use 'limit' or 'stop' if pending toggle is on
+    return orderType.split(" ")[1].toLowerCase();
+  }, [pending, orderType]);
+
+  // Build payload
   const payload = useMemo(() => {
     const base = {
       symbol,
@@ -228,13 +174,22 @@ export default function TradePanel({
       order_type: derivedOrderType,
       volume: tradeSize,
       leverage: 400,
-      stop_loss_price: useSL ? slPrice : null,
-      take_profit_price: useTP ? tpPrice : null,
+      stop_loss_price: useSL ? parseFloat(slPrice) : null,
+      take_profit_price: useTP ? parseFloat(tpPrice) : null,
     };
-    if (derivedOrderType !== "market") {
+
+    // Always include open_price if it's a market order
+    if (derivedOrderType === "market") {
+      base.open_price =
+        side === "buy" ? parseFloat(askPrice) : parseFloat(bidPrice);
+    }
+
+    // Pending order details
+    if (pending) {
       base.trigger_price = parseFloat(atPrice);
       base.expiry = expiryEnabled ? expiry : null;
     }
+
     return base;
   }, [
     symbol,
@@ -245,16 +200,25 @@ export default function TradePanel({
     tpPrice,
     useSL,
     useTP,
+    pending,
     atPrice,
     expiry,
     expiryEnabled,
+    bidPrice,
+    askPrice,
   ]);
 
-  // send to API
+  // Valid when side is chosen, SL/TP (if used) have >0 pips, and for pending orders an atPrice exists
+  const isReadyToTrade =
+    !!side &&
+    (!pending || !!atPrice) &&
+    (!useSL || slPips > 0) &&
+    (!useTP || tpPips > 0);
+
   const handleTrade = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/place`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/place`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -262,31 +226,22 @@ export default function TradePanel({
         },
         body: JSON.stringify(payload),
       });
-
       const { status, data: order, message } = await res.json();
       if (status === "success") {
         setModalData(order);
         setShowModal(true);
-        setIsSubmitting(false);
         onTradeSuccess?.(order);
       } else {
         alert("Trade failed: " + message);
       }
     } catch (err) {
       console.error("Network error:", err);
-      console.log(err);
-      setIsSubmitting(false);
       alert("Network error placing trade");
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  const isMarketReady = !!side;
-  const isPendingReady =
-    pending &&
-    !!side &&
-    !!atPrice &&
-    (!useSL || slPips > 0) &&
-    (!useTP || tpPips > 0);
-  const canPlaceAdvanced = pending || useSL || useTP;
+
   return (
     <div className="bg-[#222733] rounded-lg text-white relative">
       {/* Tabs */}
@@ -381,7 +336,6 @@ export default function TradePanel({
             >
               <div className="text-sm font-bold">SELL</div>
               <div className="text-lg font-mono">
-                {" "}
                 {bidPrice != null ? bidPrice.toFixed(5) : "--"}
               </div>
             </button>
@@ -395,24 +349,18 @@ export default function TradePanel({
             >
               <div className="text-sm font-bold">BUY</div>
               <div className="text-lg font-mono">
-                {" "}
                 {askPrice != null ? askPrice.toFixed(5) : "--"}
               </div>
-              <div
-                className="absolute top-0 right-0 w-0 h-0
-                              border-t-[12px] border-l-[12px]
-                              border-t-transparent border-l-white"
-              />
             </button>
           </div>
 
-          {/* Market button */}
+          {/* Market execution button */}
           {tab === "Market execution" && (
             <button
               onClick={handleTrade}
-              disabled={!isMarketReady || isSubmitting}
+              disabled={!isReadyToTrade || isSubmitting}
               className={`w-full py-2 rounded-lg font-semibold ${
-                isMarketReady && !isSubmitting
+                isReadyToTrade && !isSubmitting
                   ? "bg-blue-600"
                   : "bg-gray-600 cursor-not-allowed opacity-50"
               }`}
@@ -436,19 +384,16 @@ export default function TradePanel({
                   disabled={!side}
                 />
                 <div className="w-10 h-5 bg-gray-600 rounded-full peer-checked:bg-blue-500 transition" />
-                <div
-                  className="absolute left-0.5 top-0.5 bg-white w-4 h-4
-                                rounded-full peer-checked:translate-x-5 transition"
-                />
+                <div className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full peer-checked:translate-x-5 transition" />
               </label>
               <span className={`text-sm ${!side ? "opacity-50" : ""}`}>
                 Set pending order
               </span>
             </div>
 
+            {/* At price & type & expiry (only if pending) */}
             {pending && (
               <div className="space-y-3">
-                {/* At price */}
                 <div className="grid grid-cols-2 gap-2 items-center">
                   <div className="text-xs text-gray-400">At price:</div>
                   <div className="flex items-center bg-[#1A1F27] rounded-md p-1">
@@ -461,8 +406,6 @@ export default function TradePanel({
                     />
                   </div>
                 </div>
-
-                {/* Type */}
                 <div className="grid grid-cols-2 gap-2 items-center">
                   <div className="text-xs text-gray-400">Type:</div>
                   <select
@@ -477,8 +420,6 @@ export default function TradePanel({
                     )}
                   </select>
                 </div>
-
-                {/* Expiry */}
                 <div className="grid grid-cols-2 gap-2 items-center">
                   <label className="flex items-center space-x-2">
                     <input
@@ -499,106 +440,151 @@ export default function TradePanel({
                 </div>
               </div>
             )}
-            {/* SL/TP */}
-            <div className="grid grid-cols-1 gap-4 pt-2 border-t border-[#323848]">
-              {[
-                {
-                  label: "Stop Loss",
-                  enabled: useSL,
-                  toggle: () => setUseSL((u) => !u),
-                  pips: slPips,
-                  onPipsChange: handleSlPipsChange,
-                  price: slPrice,
-                  onPriceChange: handleSlPriceChange,
-                  profit: slProfit,
-                },
-                {
-                  label: "Take Profit",
-                  enabled: useTP,
-                  toggle: () => setUseTP((u) => !u),
-                  pips: tpPips,
-                  onPipsChange: handleTpPipsChange,
-                  price: tpPrice,
-                  onPriceChange: handleTpPriceChange,
-                  profit: tpProfit,
-                },
-              ].map(
-                ({
-                  label,
-                  enabled,
-                  toggle,
-                  pips,
-                  onPipsChange,
-                  price,
-                  onPriceChange,
-                  profit,
-                }) => (
-                  <div key={label} className="space-y-2">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={toggle}
-                        disabled={!side}
-                        className="form-tick h-4 w-4 text-blue-500 rounded border-gray-600"
-                      />
-                      <span className={`text-sm ${!side ? "opacity-50" : ""}`}>
-                        {label}
-                      </span>
-                    </label>
-                    <div className="grid grid-cols-3 gap-2 items-center">
-                      {/* Pips */}
-                      <div className="flex flex-col items-center bg-[#1A1F27] rounded-md p-1">
-                        <span className="text-[10px] text-gray-400">Pips</span>
-                        <div className="flex items-center mt-1">
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={pips}
-                            onChange={(e) => onPipsChange(+e.target.value)}
-                            disabled={!enabled}
-                            className="mx-1 w-8 bg-transparent text-center outline-none text-white text-sm"
-                          />
-                        </div>
-                      </div>
 
-                      {/* Price */}
-                      <div className="flex flex-col items-center bg-[#1A1F27] rounded-md p-1">
-                        <span className="text-[10px] text-gray-400">Price</span>
-                        <div className="flex items-center mt-1">
+            {/* SL / TP blocks */}
+            <table
+              className="table table-dark align-middle mb-3"
+              style={{ background: "#232733", borderRadius: 8 }}
+            >
+              <thead>
+                <tr
+                  className="text-secondary text-xs"
+                  style={{ borderBottom: "1px solid #323848" }}
+                >
+                  <th style={{ width: "30%" }}></th>
+                  <th className="text-center" style={{ width: "20%" }}>
+                    Pips
+                  </th>
+                  <th className="text-center" style={{ width: "30%" }}>
+                    Price
+                  </th>
+                  <th className="text-center" style={{ width: "20%" }}>
+                    Profit
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {
+                    label: "Stop Loss",
+                    enabled: useSL,
+                    toggle: () => setUseSL((u) => !u),
+                    pips: slPips,
+                    onPipsChange: handleSlPipsChange,
+                    price: slPrice,
+                    onPriceChange: handleSlPriceChange,
+                    color: "text-danger",
+                    profit:
+                      slPips && slPips > 0
+                        ? `–$${Math.abs(
+                            (slPips * PIP_VALUE_PER_LOT).toFixed(2)
+                          )}`
+                        : "--",
+                  },
+                  {
+                    label: "Take Profit",
+                    enabled: useTP,
+                    toggle: () => setUseTP((u) => !u),
+                    pips: tpPips,
+                    onPipsChange: handleTpPipsChange,
+                    price: tpPrice,
+                    onPriceChange: handleTpPriceChange,
+                    color: "text-success",
+                    profit:
+                      tpPips && tpPips > 0
+                        ? `+$${Math.abs(
+                            (tpPips * PIP_VALUE_PER_LOT).toFixed(2)
+                          )}`
+                        : "--",
+                  },
+                ].map(
+                  (
+                    {
+                      label,
+                      enabled,
+                      toggle,
+                      pips,
+                      onPipsChange,
+                      price,
+                      onPriceChange,
+                      color,
+                      profit,
+                    },
+                    idx
+                  ) => (
+                    <tr key={label}>
+                      <td>
+                        <div className="form-check form-switch d-inline-flex align-items-center gap-2">
                           <input
-                            type="number"
-                            step="0.00001"
-                            value={price}
-                            onChange={(e) => onPriceChange(+e.target.value)}
-                            disabled={!enabled}
-                            className="mx-1 w-12 bg-transparent text-center outline-none text-white text-sm"
+                            type="checkbox"
+                            className="form-check-input"
+                            id={label}
+                            checked={enabled}
+                            onChange={toggle}
+                            disabled={!side}
                           />
+                          <label
+                            htmlFor={label}
+                            className="form-check-label text-white text-xs mb-0 ms-2"
+                            style={!side ? { opacity: 0.5 } : {}}
+                          >
+                            {label}
+                          </label>
                         </div>
-                      </div>
-
-                      {/* Profit */}
-                      <div className="flex flex-col items-center bg-[#1A1F27] rounded-md p-2">
-                        <span className="text-[10px] text-gray-400">
-                          Profit
-                        </span>
-                        <span className="mt-1 text-sm text-white">
+                      </td>
+                      <td className="text-center">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={pips}
+                          onChange={(e) => onPipsChange(+e.target.value)}
+                          disabled={!enabled}
+                          className="form-control form-control-sm bg-dark text-white text-center"
+                          style={{
+                            maxWidth: 56,
+                            margin: "auto",
+                            padding: "2px 2px",
+                          }}
+                          id={`pips-${label}`}
+                        />
+                      </td>
+                      <td className="text-center">
+                        <input
+                          type="number"
+                          step="0.00001"
+                          value={price}
+                          onChange={(e) => onPriceChange(+e.target.value)}
+                          disabled={!enabled}
+                          className="form-control form-control-sm bg-dark text-white text-center"
+                          style={{
+                            maxWidth: 90,
+                            margin: "auto",
+                            padding: "2px 2px",
+                          }}
+                          id={`price-${label}`}
+                        />
+                      </td>
+                      <td className="text-center">
+                        <span
+                          className={"fw-bold " + color}
+                          style={{ fontSize: 15 }}
+                        >
                           {enabled ? profit : "--"}
                         </span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
 
             {/* Place order */}
             <button
               onClick={handleTrade}
-              disabled={!isMarketReady || isSubmitting}
+              disabled={!isReadyToTrade || isSubmitting}
               className={`w-full py-2 rounded-lg font-semibold ${
-                isMarketReady && !isSubmitting
+                isReadyToTrade && !isSubmitting
                   ? "bg-blue-600"
                   : "bg-gray-600 cursor-not-allowed opacity-50"
               }`}
@@ -608,6 +594,8 @@ export default function TradePanel({
           </div>
         )}
       </div>
+
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-[1000] flex items-center justify-center">
           <div className="bg-white text-black rounded-lg p-6 max-w-md w-full">

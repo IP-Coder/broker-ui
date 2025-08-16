@@ -8,8 +8,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const API_URL = "https://api.binaryprofunding.net/api/orders";
-
 export default function TradeHistoryModal({ isOpen, onClose }) {
   const [orders, setOrders] = useState([]);
 
@@ -19,9 +17,12 @@ export default function TradeHistoryModal({ isOpen, onClose }) {
     async function fetchOrders() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}?status=closed`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/orders?status=closed`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const data = await res.json();
         if (isMounted) {
           setOrders(data.orders || []);

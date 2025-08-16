@@ -1,9 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import Echo from "laravel-echo";
-import Pusher from "pusher-js";
-
-// Expose Pusher on window so Echo can use it
-window.Pusher = Pusher;
+import { socket } from "../socketClient"; // ✅ Updated to use Socket.IO
 
 // Helper for asset categories
 const getCategory = (symbolObj) => {
@@ -24,18 +20,11 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const echoRef = useRef(null);
-  const channelsRef = useRef([]);
-
-  // 1️⃣ Fetch symbols AND subscribe once on mount
+  // 1️⃣ Fetch symbols once
   useEffect(() => {
-    let echo = null;
-    let chans = [];
-
     (async () => {
       try {
-        // Fetch and initialize symbol state
-        const res = await fetch("https://api.binaryprofunding.net/api/symbols");
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/symbols`);
         const { symbols: raw = [] } = await res.json();
         const mapped = raw.map((s) => ({
           ...s,
@@ -52,114 +41,65 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
           bidSize: null,
         }));
         setSymbols(mapped);
-
-        // Set up Echo / Pusher
-        Pusher.logToConsole = false;
-        echo = new Echo({
-          broadcaster: "pusher",
-          key: import.meta.env.VITE_PUSHER_KEY,
-          cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-          forceTLS: true,
-          disableStats: true,
-        });
-        echoRef.current = echo;
-
-        echo.connector.pusher.connection.bind("connected", () =>
-          console.log("✅ Echo/Pusher connected")
-        );
-        echo.connector.pusher.connection.bind("error", (err) =>
-          console.error("⛔️ Echo/Pusher error", err)
-        );
-
-        // Subscribe to price + tick channels for each symbol
-        chans = mapped.flatMap((asset) => {
-          const safe = asset.safeSymbol;
-
-          const priceCh = echo
-            .channel(`market.price.OANDA_${safe}`)
-            .subscribed(() =>
-              console.log(`✅ Subscribed to market.price.OANDA_${safe}`)
-            )
-            .listen(".price.update", (data) => {
-              // console.log("📈 price.update", data);
-              const incoming = data.symbol.replace("OANDA:", "");
-              // console.log(incoming);
-              setSymbols((prev) =>
-                prev.map((a) => {
-                  if (a.safeSymbol !== incoming) return a;
-                  const mid = parseFloat(data.last_price);
-                  const init = a.initialPrice ?? mid;
-                  const dir = mid > init ? "up" : mid < init ? "down" : "same";
-                  const pct =
-                    init !== null ? ((mid - init) / init) * 100 : null;
-                  return {
-                    ...a,
-                    price: mid,
-                    initialPrice: init,
-                    direction: dir,
-                    changePercent: pct,
-                    high: a.high != null ? Math.max(a.high, mid) : mid,
-                    low: a.low != null ? Math.min(a.low, mid) : mid,
-                  };
-                })
-              );
-            });
-
-          const tickCh = echo
-            .channel(`market.tick.OANDA_${safe}`)
-            .subscribed(() =>
-              console.log(`✅ Subscribed to market.tick.OANDA_${safe}`)
-            )
-            .listen(".tick.update", (data) => {
-              // console.log("🔄 tick.update", data);
-              const incoming = data.symbol.replace("OANDA:", "");
-              setSymbols((prev) =>
-                prev.map((a) =>
-                  a.safeSymbol !== incoming
-                    ? a
-                    : {
-                        ...a,
-
-                        ask: data.ask,
-                        bid: data.bid,
-                        askSize: data.ask_size ?? data.askSize,
-                        bidSize: data.bid_size ?? data.bidSize,
-                      }
-                )
-              );
-            });
-
-          return [priceCh, tickCh];
-        });
-
-        channelsRef.current = chans;
       } catch (err) {
-        console.error("Failed to load symbols or subscribe", err);
+        console.error("Failed to load symbols", err);
       }
     })();
+  }, []);
 
-    // Cleanup on unmount
+  // 2️⃣ Subscribe to WebSocket
+  useEffect(() => {
+    socket.on("tick", (data) => {
+      const incoming = data.code.replace("OANDA:", "");
+
+      setSymbols((prev) =>
+        prev.map((a) => {
+          if (a.safeSymbol !== incoming) return a;
+
+          let updated = { ...a };
+
+          if (data.last_price != null) {
+            const mid = parseFloat(data.last_price);
+            const init = a.initialPrice ?? mid;
+            const dir = mid > init ? "up" : mid < init ? "down" : "same";
+            const pct = data.change;
+
+            updated = {
+              ...updated,
+              price: mid,
+              initialPrice: init,
+              direction: dir,
+              changePercent: pct,
+              high: a.high != null ? Math.max(a.high, mid) : mid,
+              low: a.low != null ? Math.min(a.low, mid) : mid,
+            };
+          }
+
+          if (data.ask != null) updated.ask = data.ask;
+          if (data.bid != null) updated.bid = data.bid;
+          if (data.ask_size != null || data.askSize != null)
+            updated.askSize = data.ask_size ?? data.askSize;
+          if (data.bid_size != null || data.bidSize != null)
+            updated.bidSize = data.bid_size ?? data.bidSize;
+
+          return updated;
+        })
+      );
+    });
+
     return () => {
-      chans.forEach((ch) => {
-        ch.stopListening(".price.update");
-        ch.stopListening(".tick.update");
-        echo.leaveChannel(ch.name);
-      });
-      if (echo) echo.disconnect();
+      socket.off("tick");
     };
-  }, []); // run once
+  }, []);
 
-  // 2️⃣ Load user favourites
+  // 3️⃣ Load user favourites
   useEffect(() => {
     if (!user) return;
     (async () => {
       try {
-        const res = await fetch(
-          "https://api.binaryprofunding.net/api/favorites",
-          {
-            headers: { Authorization: `Bearer ${user.token}` },
-          }
-        );
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/symbols`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
         const { favorites = [] } = await res.json();
         setFavourites(favorites.map((f) => f.symbol));
       } catch (err) {
@@ -168,7 +108,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     })();
   }, [user]);
 
-  // 3️⃣ Toggle favourite
+  // 4️⃣ Toggle favourite
   const toggleFavourite = async (symbol) => {
     if (!user) return;
     const isFav = favourites.includes(symbol);
@@ -178,9 +118,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     setFavourites(updated);
     try {
       await fetch(
-        `https://api.binaryprofunding.net/api/favorites${
-          isFav ? `/${symbol}` : ""
-        }`,
+        `${import.meta.env.VITE_API_URL}/favorites${isFav ? `/${symbol}` : ""}`,
         {
           method: isFav ? "DELETE" : "POST",
           headers: {
@@ -195,7 +133,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     }
   };
 
-  // 4️⃣ Filter & categorize
+  // 5️⃣ Filter & categorize
   const categorized = {
     Favourites: symbols.filter((s) => favourites.includes(s.symbol)),
     Currencies: symbols.filter((s) => getCategory(s) === "Currencies"),
@@ -214,7 +152,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     );
   });
 
-  // 5️⃣ Scroll logic for tabs
+  // 6️⃣ Scroll logic
   const scrollChips = (dir) => {
     chipRowRef.current?.scrollBy({
       left: dir === "left" ? -120 : 120,

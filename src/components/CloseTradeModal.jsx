@@ -1,68 +1,64 @@
-// src/components/CloseTradeModal.jsx
 import { X as XIcon } from "lucide-react";
-import { format } from "date-fns";
 import { useState, useEffect } from "react";
+import { socket } from "../socketClient"; // ✅ Import socket
 
 export default function CloseTradeModal({ position, onClose, onClosed }) {
   const [currentPrice, setCurrentPrice] = useState(position.current_price);
-  const [profit, setProfit] = useState("…");
+  const [profit, setProfit] = useState(position.profit);
   const [partial, setPartial] = useState(false);
   const [closeVolume, setCloseVolume] = useState(position.volume);
   const [submitting, setSubmitting] = useState(false);
 
-  // 1) refresh current price & profit once on mount
+  // 1️⃣ Subscribe to socket.io tick for live price
   useEffect(() => {
-    async function fetchLatest() {
-      try {
-        const res = await fetch(`http://localhost/server/public/api/orders`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
-        const { orders } = await res.json();
-        const o = orders.find((o) => o.id === position.id);
-        if (o?.live_price) {
-          setCurrentPrice(o.live_price);
-          // P/L in your currency = (live − open) × volume × pip‐value
-          const p =
-            (parseFloat(o.live_price) - parseFloat(o.open_price)) *
-            parseFloat(closeVolume) *
-            100000;
-          setProfit(p.toFixed(2));
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    fetchLatest();
-  }, [position.id, closeVolume]);
+    const handleTick = (data) => {
+      if (!data.code) return;
+      const symbol = data.code.replace("OANDA:", "");
+      if (symbol !== position.symbol) return;
 
-  // 2) submit close
+      const price =
+        position.type === "buy" ? parseFloat(data.bid) : parseFloat(data.ask);
+
+      if (!price) return;
+
+      setCurrentPrice(price.toFixed(5));
+
+      const p =
+        (price - parseFloat(position.open_price)) *
+        parseFloat(closeVolume) *
+        100000 *
+        (position.type === "sell" ? -1 : 1);
+
+      setProfit(p.toFixed(2));
+    };
+
+    socket.on("tick", handleTick);
+    return () => socket.off("tick", handleTick);
+  }, [position, closeVolume]);
+
+  // 2️⃣ Submit close order with live data
   async function handleConfirm() {
     setSubmitting(true);
     try {
-      const res = await fetch(
-        `https://api.binaryprofunding.net/api/order/close`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({
-            order_id: position.id,
-          }),
-        }
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/order/close`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          order_id: position.id,
+          close_price: parseFloat(currentPrice),
+          profit_loss: parseFloat(profit),
+          volume: parseFloat(closeVolume),
+        }),
+      });
       if (!res.ok) throw new Error(await res.text());
       onClosed(position.id);
     } catch (e) {
       console.error(e.message);
       alert("Error closing trade: " + e.message);
     } finally {
-      console.log("Trade closed successfully");
-      // Reset state
       setSubmitting(false);
       onClose();
     }
@@ -77,7 +73,6 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
         className="bg-[#23272F] rounded-lg w-96 p-6 relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-white">
             Close Trade #{position.id}
@@ -87,7 +82,6 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
           </button>
         </div>
 
-        {/* Details */}
         <div className="space-y-2 text-gray-400 text-sm mb-4">
           <div className="flex justify-between">
             <span>Asset</span>
@@ -107,7 +101,6 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
           </div>
         </div>
 
-        {/* Profit */}
         <div className="text-center mb-4">
           <p className="text-gray-400">
             Close the trade now with current profit
@@ -121,8 +114,7 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
           </p>
         </div>
 
-        {/* Partial Close */}
-        <label className="inline-flex items-center mb-4 text-gray-400">
+        {/* <label className="inline-flex items-center mb-4 text-gray-400">
           <input
             type="checkbox"
             className="form-checkbox h-4 w-4 mr-2"
@@ -144,9 +136,8 @@ export default function CloseTradeModal({ position, onClose, onClosed }) {
               onChange={(e) => setCloseVolume(e.target.value)}
             />
           </div>
-        )}
+        )} */}
 
-        {/* Actions */}
         <div className="flex justify-between">
           <button
             onClick={onClose}

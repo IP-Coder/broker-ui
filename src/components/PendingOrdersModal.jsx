@@ -8,8 +8,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const API_URL = "https://api.binaryprofunding.net/api/orders";
-
 export default function PendingOrdersModal({ isOpen, onClose }) {
   const [orders, setOrders] = useState([]);
 
@@ -19,10 +17,14 @@ export default function PendingOrdersModal({ isOpen, onClose }) {
     async function fetchOrders() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}?status=pending`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/orders?status=pending`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const data = await res.json();
+        console.log(data);
         if (isMounted) {
           setOrders(data.orders || []);
         }
@@ -47,8 +49,8 @@ export default function PendingOrdersModal({ isOpen, onClose }) {
     side: o.type || o.side,
     volume: o.volume,
     price: o.price ?? o.open_price,
-    stopLoss: o.stop_loss ?? "---",
-    takeProfit: o.take_profit ?? "---",
+    stopLoss: o.stop_loss_price ?? "---",
+    takeProfit: o.take_profit_price ?? "---",
   }));
 
   return (
