@@ -1,78 +1,103 @@
-// src/components/ChartPanel.jsx
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const TV_SCRIPT_ID = "tradingview-advanced-chart-script";
 const TV_SCRIPT_SRC = "https://s3.tradingview.com/tv.js";
 
 export default function ChartPanel({
-  symbol = "EURUSD", // Pair, without slash
-  interval = "60", // Chart interval in minutes
-  theme = "dark", // "light" or "dark"
-  locale = "en", // Language
-  autosize = true, // true → fills container
-  toolbarBg = "#f1f3f6", // toolbar background
-  containerId = "tv-advanced-chart", // fixed id
+  symbol = "EURUSD",
+  interval = "60",
+  theme = "dark",
+  locale = "en",
+  autosize = true,
+  toolbarBg = "#f1f3f6",
+  containerId = "tv-advanced-chart",
 }) {
   const widgetRef = useRef(null);
+  const [isScriptReady, setIsScriptReady] = useState(false);
 
-  // 1. Inject the TradingView script if not already on the page
+  // Load TradingView script only once
   useEffect(() => {
-    if (!document.getElementById(TV_SCRIPT_ID)) {
-      const script = document.createElement("script");
-      script.id = TV_SCRIPT_ID;
-      script.src = TV_SCRIPT_SRC;
-      script.async = true;
-      document.head.appendChild(script);
+    if (document.getElementById(TV_SCRIPT_ID)) {
+      setIsScriptReady(true);
+      return;
     }
+
+    const script = document.createElement("script");
+    script.id = TV_SCRIPT_ID;
+    script.src = TV_SCRIPT_SRC;
+    script.async = true;
+    script.onload = () => setIsScriptReady(true);
+    document.head.appendChild(script);
+
+    return () => {
+      // script cleanup (optional, usually keep cached)
+    };
   }, []);
 
-  // 2. Initialize / re‑init widget when symbol or other config changes
+  // Initialize / reinit widget
   useEffect(() => {
-    // bail if TV global not ready yet
-    if (!window.TradingView) return;
+    if (!isScriptReady || !window.TradingView) return;
 
-    // destroy previous instance
+    // Destroy previous instance
     if (widgetRef.current) {
       try {
         widgetRef.current.remove();
       } catch (e) {
-        /* ignore */
+        console.warn("TV widget remove error:", e);
       }
       widgetRef.current = null;
     }
 
-    // set up new widget
+    // Create new widget
     widgetRef.current = new window.TradingView.widget({
       autosize,
-      symbol: `OANDA:${symbol}`, // e.g. "OANDA:EURUSD"
+      symbol: `OANDA:${symbol}`,
       interval,
       timezone: "exchange",
       theme,
-      style: "1", // candlesticks
+      style: "1",
       locale,
       toolbar_bg: toolbarBg,
       hide_top_toolbar: false,
       withdateranges: true,
-      allow_symbol_change: false, // enforce symbol from props
+      allow_symbol_change: false,
       details: false,
-      studies: [], // add default studies here if desired
+      studies: [],
       container_id: containerId,
       hide_side_toolbar: false,
     });
 
-    // responsive
+    // Handle resize
     const onResize = () => widgetRef.current?.resize();
     window.addEventListener("resize", onResize);
+
     return () => {
       window.removeEventListener("resize", onResize);
-      widgetRef.current?.remove();
+      try {
+        widgetRef.current?.remove();
+      } catch (e) {
+        console.warn("TV cleanup error:", e);
+      }
     };
-  }, [symbol, interval, theme, locale, toolbarBg, autosize, containerId]);
+  }, [
+    isScriptReady,
+    symbol,
+    interval,
+    theme,
+    locale,
+    toolbarBg,
+    autosize,
+    containerId,
+  ]);
 
   return (
-    <div className="relative w-full h-[100%] bg-gray-900 rounded-lg shadow-lg overflow-hidden">
-      <div className="absolute top-4 left-4 z-10 text-white text-xl font-semibold"></div>
+    <div className="relative w-full h-full bg-gray-900 rounded-lg shadow-lg overflow-hidden">
       <div id={containerId} className="w-full h-full" />
+      {!isScriptReady && (
+        <div className="absolute inset-0 flex items-center justify-center text-white">
+          Loading Chart...
+        </div>
+      )}
     </div>
   );
 }
