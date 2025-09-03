@@ -4,9 +4,9 @@ import Header from "../components/Header";
 
 /** ----- CONFIG: set your real deposit addresses here ----- */
 const ADDRESS_BOOK = {
-  TRC20: "TMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // <-- TRON (TRC-20) address
-  BEP20: "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBEP-20", // <-- BNB Smart Chain (BEP-20)
-  ERC20: "0xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXERC-20", // <-- Ethereum (ERC-20) address
+  TRC20: "TGTUf657Yxu8FJainjxoV7Mwy1bkEykkGy", // <-- TRON (TRC-20) address
+  BEP20: "0x53D78d8aD2153063A6fb71ec625946a712C10597", // <-- BNB Smart Chain (BEP-20)
+  ERC20: "0x53D78d8aD2153063A6fb71ec625946a712C10597", // <-- Ethereum (ERC-20) address
 };
 /** ------------------------------------------------------- */
 
