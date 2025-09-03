@@ -1,7 +1,8 @@
 // src/components/TradePanel.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { socket } from "../socketClient"; // ✅ Socket.IO client
-
+import { Toast } from "../noti/Toast";
+import { useNotificationSound } from "../noti/useNotificationSound";
 const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID;
 
 // Helpers
@@ -27,8 +28,11 @@ export default function TradePanel({
   const [side, setSide] = useState("");
   const [pending, setPending] = useState(false);
   const [atPrice, setAtPrice] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [modalData, setModalData] = useState(null);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastData, setToastData] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [toastTitle, setToastTitle] = useState("");
+  const playChime = useNotificationSound();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [orderType, setOrderType] = useState("Buy Limit");
@@ -228,15 +232,21 @@ export default function TradePanel({
       });
       const { status, data: order, message } = await res.json();
       if (status === "success") {
-        setModalData(order);
-        setShowModal(true);
+        setToastTitle("Trade Placed Successfully");
+        setToastData("Your order has been sent.");
+        setToastType("success");
+        setToastOpen(true);
+        playChime();
         onTradeSuccess?.(order);
       } else {
         alert("Trade failed: " + message);
       }
     } catch (err) {
       console.error("Network error:", err);
-      alert("Network error placing trade");
+      setToastTitle("Network Error");
+      setToastData("There was a problem placing your trade.");
+      setToastType("error");
+      setToastOpen(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -596,7 +606,7 @@ export default function TradePanel({
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {/* {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-[1000] flex items-center justify-center">
           <div className="bg-white text-black rounded-lg p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">Trade Placed!</h3>
@@ -611,7 +621,16 @@ export default function TradePanel({
             </button>
           </div>
         </div>
-      )}
+      )} */}
+      {/* Top-right dismissable toast */}
+      <Toast
+        open={toastOpen}
+        onClose={() => setToastOpen(false)}
+        title={toastTitle}
+        description={toastData}
+        type={toastType}
+        duration={4000}
+      />
     </div>
   );
 }

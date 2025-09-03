@@ -1,71 +1,319 @@
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
+/**
+ * Header: pixel-aligned to your screenshot and mobile responsive.
+ * - Left: Logo
+ * - Tools: Language (🇬🇧 dropdown) • Fullscreen • Info • Support (headset) • DEMO • Avatar (A dropdown)
+ * - Right: "Banking" link + green "Deposit" button
+ * - On mobile: tools collapse under a three-dot menu; Deposit stays visible.
+ */
 export default function Header() {
   const navigate = useNavigate();
-  const location = useLocation();
 
+  // UI state
+  const [openLang, setOpenLang] = useState(false);
+  const [openUser, setOpenUser] = useState(false);
+  const [openBanking, setOpenBanking] = useState(false);
+  const [openMore, setOpenMore] = useState(false);
+
+  const langRef = useRef(null);
+  const userRef = useRef(null);
+  const bankingRef = useRef(null);
+  const moreRef = useRef(null);
+
+  // click-outside to close menus
+  useEffect(() => {
+    function onDocClick(e) {
+      if (langRef.current && !langRef.current.contains(e.target))
+        setOpenLang(false);
+      if (userRef.current && !userRef.current.contains(e.target))
+        setOpenUser(false);
+      if (bankingRef.current && !bankingRef.current.contains(e.target))
+        setOpenBanking(false);
+      if (moreRef.current && !moreRef.current.contains(e.target))
+        setOpenMore(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  // actions
   function handleLogout() {
-    localStorage.removeItem("token"); // ya tumhari auth key
+    localStorage.removeItem("token");
     navigate("/login");
   }
 
-  const navItems = [
-    { path: "/dashboard", label: "Dashboard" },
-    { path: "/profile", label: "Profile" },
-  ];
+  function toggleFullscreen() {
+    const d = document;
+    if (!d.fullscreenElement) d.documentElement.requestFullscreen?.();
+    else d.exitFullscreen?.();
+  }
+
+  const brand = (
+    <button
+      onClick={() => navigate("/dashboard")}
+      className="flex items-center gap-2"
+      aria-label="BullMarkets home"
+    >
+      {/* Simple geometric logo matching vibe */}
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-emerald-500">
+        <svg viewBox="0 0 24 24" className="w-5 h-5 text-white">
+          <path d="M4 18L12 4l8 14H4z" fill="currentColor" />
+        </svg>
+      </span>
+      <span className="text-xl font-extrabold tracking-tight text-[#0B1B7F]">
+        RoyalFx
+      </span>
+    </button>
+  );
+
+  const toolIconBtn = (props) => (
+    <button
+      {...props}
+      className={`p-2 rounded hover:bg-gray-100 text-[#0B1B7F] ${
+        props.className || ""
+      }`}
+    />
+  );
 
   return (
-    <header className="bg-[#23272F] flex items-center justify-between px-6 h-16 shadow-md">
-      {/* Left side */}
-      <div className="flex items-center gap-6">
-        <span
-          className="text-lg font-bold text-white cursor-pointer"
-          onClick={() => navigate("/dashboard")}
-        >
-          BullMarkets
-        </span>
+    <header className="sticky top-0 z-40 bg-white border-t border-gray-800 shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+      <div className=" px-3 sm:px-4">
+        <div className="h-14 flex items-center justify-between gap-3">
+          {/* Left cluster */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            {brand}
 
-        {/* Navigation */}
-        <nav className="flex gap-4">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`text-sm font-medium px-2 py-1 rounded 
-                ${
-                  location.pathname === item.path
-                    ? "text-blue-400 border-b-2 border-blue-400"
-                    : "text-gray-300 hover:text-white"
-                }`}
+            {/* Language */}
+            <div className="relative" ref={langRef}>
+              <button
+                onClick={() => setOpenLang((v) => !v)}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100"
+                aria-haspopup="menu"
+                aria-expanded={openLang}
+              >
+                <span className="text-lg text-[#0B1B7F] leading-none">🇬🇧</span>
+                <svg
+                  className="w-3 h-3 text-[#0B1B7F]"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M5.5 7.5L10 12l4.5-4.5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                </svg>
+              </button>
+              {openLang && (
+                <div className="absolute mt-2 w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <button className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50">
+                    🇬🇧 English
+                  </button>
+                  <button className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50">
+                    🇮🇳 हिन्दी
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop tools */}
+            <div className="hidden md:flex items-center gap-2">
+              {/* Fullscreen */}
+              {toolIconBtn({
+                onClick: toggleFullscreen,
+                title: "Fullscreen",
+                children: (
+                  <svg viewBox="0 0 24 24" className="w-5 h-5">
+                    <path
+                      d="M7 3H3v4M21 7V3h-4M3 17v4h4M17 21h4v-4"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      fill="none"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                ),
+              })}
+              {/* Info */}
+              <Link
+                to="/info"
+                title="Info"
+                className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5">
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                  <circle cx="12" cy="8" r="1.5" fill="currentColor" />
+                  <path d="M11 11h2v7h-2z" fill="currentColor" />
+                </svg>
+              </Link>
+              {/* Support (headset) */}
+              <Link
+                to="/support"
+                title="Support"
+                className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5">
+                  <path
+                    d="M4 12a8 8 0 0116 0v5a3 3 0 01-3 3h-3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                  <path
+                    d="M4 12v5a3 3 0 003 3h2v-5H7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                </svg>
+              </Link>
+
+              {/* DEMO + Avatar */}
+              <span className="text-xs font-extrabold text-[#0B1B7F] tracking-wider select-none">
+                DEMO
+              </span>
+              <div className="relative" ref={userRef}>
+                <button
+                  onClick={() => setOpenUser((v) => !v)}
+                  className="flex items-center gap-1"
+                  aria-haspopup="menu"
+                  aria-expanded={openUser}
+                >
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-[#0B1B7F] font-bold">
+                    A
+                  </span>
+                  <svg
+                    className="w-3 h-3 text-[#0B1B7F]"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M5.5 7.5L10 12l4.5-4.5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      fill="none"
+                    />
+                  </svg>
+                </button>
+                {openUser && (
+                  <div className="absolute right-0 mt-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg">
+                    <Link
+                      to="/profile"
+                      className="block px-3 py-2 hover:bg-gray-50"
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile "more" menu for tools */}
+            <div className="md:hidden relative" ref={moreRef}>
+              <button
+                onClick={() => setOpenMore((v) => !v)}
+                className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
+                aria-label="More"
+                aria-haspopup="menu"
+                aria-expanded={openMore}
+              >
+                <svg viewBox="0 0 24 24" className="w-6 h-6">
+                  <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+                  <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+                  <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+                </svg>
+              </button>
+              {openMore && (
+                <div className="absolute left-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <button
+                    onClick={toggleFullscreen}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                  >
+                    Fullscreen
+                  </button>
+                  <Link to="/info" className="block px-3 py-2 hover:bg-gray-50">
+                    Info
+                  </Link>
+                  <Link
+                    to="/support"
+                    className="block px-3 py-2 hover:bg-gray-50"
+                  >
+                    Support
+                  </Link>
+                  <div className="border-t my-1"></div>
+                  <div className="px-3 py-2 text-xs text-gray-500">Account</div>
+                  <Link
+                    to="/profile"
+                    className="block px-3 py-2 hover:bg-gray-50"
+                  >
+                    Profile
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right cluster */}
+          <div className="flex items-center gap-4">
+            {/* Banking (opens dropdown to Deposit / Withdrawal) */}
+            <div className="relative hidden sm:block" ref={bankingRef}>
+              <button
+                onClick={() => setOpenBanking((v) => !v)}
+                className="text-[#0B1B7F] hover:underline font-medium"
+                aria-haspopup="menu"
+                aria-expanded={openBanking}
+              >
+                Banking
+              </button>
+              {openBanking && (
+                <div className="absolute right-0 mt-2 w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <Link
+                    to="/deposit"
+                    className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
+                  >
+                    Deposit
+                  </Link>
+                  <Link
+                    to="/withdrawal"
+                    className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
+                  >
+                    Withdrawal
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Deposit button */}
+            <button
+              onClick={() => navigate("/deposit")}
+              className="px-4 sm:px-5 py-2 rounded-lg bg-emerald-400 text-[#0B1B7F] font-semibold hover:brightness-95 active:brightness-90"
             >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      {/* Right side */}
-      <div className="flex items-center gap-4">
-        {/* Account Type */}
-        <span className="text-blue-400 font-bold px-3 py-1 rounded bg-blue-950 text-xs">
-          DEMO
-        </span>
-
-        {/* Deposit */}
-        <Link
-          to="/deposit-withdraw"
-          className="bg-green-500 hover:bg-green-600 text-white font-semibold px-4 py-2 rounded-lg"
-        >
-          Deposit
-        </Link>
-
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded-lg"
-        >
-          Logout
-        </button>
+              Deposit
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   );

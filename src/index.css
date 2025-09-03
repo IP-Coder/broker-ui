@@ -67,3 +67,49 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 } */
+
+
+/* ---- Global thin line scrollbars ---- */
+:root {
+  --sb-thumb: rgba(0, 0, 0, 0.45);   /* tweak color to taste */
+  --sb-thumb-hover: rgba(0, 0, 0, 0.65);
+  --sb-track: transparent;           /* keep track invisible */
+}
+
+/* Firefox */
+html, * {
+  scrollbar-width: thin;                     /* makes it ~6px; Firefox can't do px */
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+
+/* Chrome, Edge (Chromium), Safari */
+*::-webkit-scrollbar {
+  width: 2px;                                /* vertical scrollbar thickness */
+  height: 2px;                               /* horizontal scrollbar thickness */
+  background: var(--sb-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--sb-thumb);
+  border-radius: 1px;                        /* keeps it looking like a line */
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sb-thumb-hover);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--sb-track);
+}
+
+/* Hide legacy arrow buttons entirely */
+*::-webkit-scrollbar-button {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Hide the corner where two scrollbars meet */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -1,0 +1,109 @@
+/* @tailwind base;
+@tailwind components; */
+@tailwind utilities;
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes chartLine {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.nav-logo {
+  @apply transition-transform duration-300;
+}
+
+.nav-logo:hover {
+  transform: scale(1.05);
+}
+
+.login-btn {
+  @apply border-2 border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white transition-all duration-300;
+}
+
+.signup-btn {
+  @apply bg-blue-500 text-white hover:animate-pulse transition-all duration-300;
+}
+
+.hero-cta {
+  @apply relative overflow-hidden bg-blue-500 text-white;
+}
+
+.hero-cta::after {
+  content: "";
+  @apply absolute inset-0 bg-white opacity-0 transition-opacity duration-300;
+}
+
+.hero-cta:hover::after {
+  @apply opacity-20;
+}
+
+.chart-bg {
+  background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-line {
+  position: absolute;
+  width: 200%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 50px,
+    rgba(59, 130, 246, 0.1) 50px,
+    rgba(59, 130, 246, 0.1) 51px
+  );
+  animation: chartLine 20s linear infinite;
+}
+
+.share-card {
+  @apply transform transition-all duration-300 hover:scale-105;
+}
+
+.benefit-card {
+  @apply perspective-1000 transform-style-preserve-3d transition-transform duration-500;
+}
+
+.benefit-card:hover {
+  transform: rotateY(180deg);
+}
+
+.benefit-card-front,
+.benefit-card-back {
+  @apply absolute inset-0 backface-hidden;
+}
+
+.benefit-card-back {
+  transform: rotateY(180deg);
+}
+
+.sticky-nav {
+  @apply fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-lg shadow-lg transition-all duration-300;
+}

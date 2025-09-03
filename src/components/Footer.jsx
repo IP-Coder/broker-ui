@@ -152,16 +152,6 @@ export default function Footer() {
             Trade History
           </button>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-gray-400">Powered by</span>
-            <a
-              href="https://forexfeed.net"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img src="/forexfeed-logo.svg" alt="ForexFeed" className="h-4" />
-            </a>
-          </div>
         </div>
       </footer>
 

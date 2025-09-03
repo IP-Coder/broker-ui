@@ -9,8 +9,9 @@ export default function ChartPanel({
   theme = "dark",
   locale = "en",
   autosize = true,
-  toolbarBg = "#f1f3f6",
+  toolbarBg = "#181C23",
   containerId = "tv-advanced-chart",
+  hide_volume = true,
 }) {
   const widgetRef = useRef(null);
   const [isScriptReady, setIsScriptReady] = useState(false);
@@ -65,6 +66,8 @@ export default function ChartPanel({
       studies: [],
       container_id: containerId,
       hide_side_toolbar: false,
+      hide_volume,
+      hide_legend: true,
     });
 
     // Handle resize
