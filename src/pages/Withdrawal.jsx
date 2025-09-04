@@ -117,17 +117,9 @@ export default function Banking() {
 /* ---------- Withdrawal (crypto) form ---------- */
 function CryptoWithdrawForm({ onSubmitted }) {
   const CURRENCIES = [
-    { value: "BINANCE_PAY", label: "Binance Pay" },
-    { value: "ETH", label: "Ethereum (ETH)" },
-    { value: "USDT_TRC20", label: "USD Tether (TRC-20)" },
-    { value: "USDT_ERC20", label: "USD Tether (ERC-20)" },
-    { value: "USDT_BEP20", label: "USD Tether (BEP-20)" },
-    { value: "BTC", label: "Bitcoin (BTC)" },
-    { value: "BNB_BSC", label: "Binance Coin (BSC)" },
-    { value: "LTC", label: "Litecoin (LTC)" },
-    { value: "BCH", label: "Bitcoin Cash (BCH)" },
-    { value: "TRX", label: "Tron (TRX)" },
-    { value: "USDC_ERC20", label: "USD Coin (USDC ERC-20)" },
+    { value: "USDT_TRC20", label: "USDT (TRC-20)" },
+    { value: "USDT_ERC20", label: "USDT (ERC-20)" },
+    { value: "USDT_BEP20", label: "USDT (BEP-20)" },
   ];
   const CHAINS = [
     { value: "TRC20", label: "TRC-20 (Tron)" },

@@ -8,6 +8,9 @@ export default function Login() {
   // which view?
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
 
+  // NEW: which signup type?
+  const [accountType, setAccountType] = useState("demo"); // 'demo' | 'live'
+
   // login state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -60,8 +63,8 @@ export default function Login() {
         name,
         email: signupEmail,
         password: signupPassword,
-        // many backends expect this; sending same value keeps UI clean like your HTML page
         password_confirmation: signupPassword,
+        account_type: accountType, // 'demo' | 'live'
       });
 
       if (data?.token) {
@@ -78,7 +81,9 @@ export default function Login() {
         }, 1000);
       }
     } catch (err) {
-      setSignupError("Sign up failed. Please try again.");
+      setSignupError(
+        err?.response?.data?.message || "Sign up failed. Please try again."
+      );
     } finally {
       setTimeout(() => setSignupLoading(false), 250);
     }
@@ -161,16 +166,57 @@ export default function Login() {
       {/* card */}
       <div className="auth-container">
         <div className="auth-header">
-          <h1>{mode === "login" ? "Welcome to RoyalsFX" : "Join RoyalsFX"}</h1>
-          <p>
-            {mode === "login"
-              ? "Access your premium trading dashboard"
-              : "Begin your trading journey with confidence"}
-          </p>
+          {mode === "login" ? (
+            <>
+              <h1>Welcome to RoyalsFX</h1>
+              <p>Access your premium trading dashboard</p>
+            </>
+          ) : (
+            <>
+              <h1>Join RoyalsFX</h1>
+              <p>Begin your trading journey with confidence</p>
+
+              {/* signup tabs */}
+              <div
+                className="signup-tabs"
+                role="tablist"
+                aria-label="Account type"
+              >
+                <button
+                  role="tab"
+                  aria-selected={accountType === "demo"}
+                  className={`signup-tab ${
+                    accountType === "demo" ? "active" : ""
+                  }`}
+                  onClick={() => setAccountType("demo")}
+                  type="button"
+                >
+                  Demo Account
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={accountType === "live"}
+                  className={`signup-tab ${
+                    accountType === "live" ? "active" : ""
+                  }`}
+                  onClick={() => setAccountType("live")}
+                  type="button"
+                >
+                  Live Account
+                </button>
+              </div>
+
+              <div className="tab-hint">
+                {accountType === "demo"
+                  ? "Practice with virtual funds (no real money)."
+                  : "Real trading. KYC & funding required."}
+              </div>
+            </>
+          )}
         </div>
 
         {(mode === "login" ? loginError : signupError) && (
-          <div className="error-banner">
+          <div className="error-banner" role="alert">
             {mode === "login" ? loginError : signupError}
           </div>
         )}
@@ -304,7 +350,14 @@ export default function Login() {
               >
                 <Eye slash={signupShowPwd} />
               </button>
+              {/* Password rules helper */}
+              <ul className="pwd-hints" aria-live="polite">
+                <li className={signupPassword.length >= 8 ? "ok" : ""}>
+                  • At least 8 characters
+                </li>
+              </ul>
             </div>
+
             <div className="terms-group">
               <input type="checkbox" id="terms-agree" required />
               <label htmlFor="terms-agree" className="terms-text">
@@ -313,10 +366,11 @@ export default function Login() {
                 old.
               </label>
             </div>
+
             <button
               type="submit"
               className="auth-button"
-              disabled={signupLoading}
+              disabled={signupLoading || signupPassword.length < 8}
             >
               {signupLoading ? (
                 <div className="loading" aria-label="Loading" />
@@ -388,7 +442,7 @@ export default function Login() {
   );
 }
 
-/* ------------------ Styles (same as your login.html, adapted for React) ------------------ */
+/* ------------------ Styles ------------------ */
 const styles = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -410,13 +464,12 @@ const styles = `
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* reset + SPA fixes (removes bottom black bar) */
 html, body, #root { height: 100%; }
 body { margin: 0; padding: 0; }
 .page-pad {
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
-  padding: 20px; /* moved from body to avoid extra scroll */
+  padding: 20px;
   background-color: var(--primary-bg);
   color: var(--text-primary);
   background-image:
@@ -427,7 +480,6 @@ body { margin: 0; padding: 0; }
   overflow-x: hidden;
 }
 
-/* floating shapes like your HTML */
 .floating-shapes { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
 .shape { position: absolute; opacity: 0.1; border-radius: 50%; filter: blur(40px); }
 .shape-1 { width: 300px; height: 300px; background: var(--accent-blue); top: 10%; left: 5%; animation: float 15s ease-in-out infinite; }
@@ -467,7 +519,7 @@ body { margin: 0; padding: 0; }
 @keyframes rotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
 @keyframes fadeIn { from{opacity:0; transform:translateY(20px)} to{opacity:1; transform:translateY(0)} }
 
-.auth-header { text-align:center; margin-bottom: 36px; position: relative; }
+.auth-header { text-align:center; margin-bottom: 24px; position: relative; }
 .auth-header h1 {
   font-size: 28px; font-weight: 600; margin-bottom: 8px;
   background: linear-gradient(90deg, #f0f6fc 0%, var(--accent-blue) 50%, var(--accent-gold) 100%);
@@ -476,6 +528,17 @@ body { margin: 0; padding: 0; }
 }
 @keyframes gradient { 0%{background-position:0% center} 50%{background-position:100% center} 100%{background-position:0% center} }
 .auth-header p { color: var(--text-secondary); font-size: 15px; }
+
+/* signup tabs */
+.signup-tabs { display:flex; gap:8px; justify-content:center; margin-top:14px; }
+.signup-tab {
+  padding:10px 14px; border-radius:8px; border:1px solid var(--input-border);
+  background: var(--secondary-bg); color: var(--text-secondary); cursor:pointer;
+  transition: var(--transition); font-weight:600; font-size:14px;
+}
+.signup-tab.active { color: var(--text-primary); border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(88,166,255,0.15); }
+.signup-tab:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+.tab-hint { text-align:center; color:var(--text-secondary); margin-top:8px; font-size:12px; }
 
 .auth-form { display:flex; flex-direction:column; gap:24px; }
 .form-group { display:flex; flex-direction:column; gap:8px; position:relative; }
@@ -500,6 +563,11 @@ body { margin: 0; padding: 0; }
   background:transparent; border:0; padding:4px;
 }
 .password-toggle:hover { color: var(--accent-gold); }
+
+.error-banner {
+  margin-bottom: 16px; padding: 12px 14px; border-radius: 8px;
+  background: rgba(255, 77, 79, 0.12); color: #ff7b82; border: 1px solid rgba(255, 77, 79, 0.35);
+}
 
 .auth-button {
   background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-gold) 100%);
@@ -541,63 +609,27 @@ body { margin: 0; padding: 0; }
 @keyframes checkmark { 0%{ stroke-dashoffset:50 } 100%{ stroke-dashoffset:0 } }
 .checkmark { width:18px; height:18px; stroke:#fff; stroke-width:3; stroke-dasharray:50; stroke-dashoffset:50; animation: checkmark .5s ease-in-out forwards; }
 
+/* password hints */
+.pwd-hints { margin: 4px 0 0; padding-left: 0; list-style: none; font-size: 12px; color: var(--text-secondary); }
+.pwd-hints li.ok { color: #3fb950; }
+
 /* responsive */
 @media (max-width: 480px) {
   .auth-container { padding: 32px 24px; }
   .auth-header h1 { font-size: 24px; }
 }
-  /* Terms checkbox */
-        .terms-group {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-top: 8px;
-        }
 
-        .terms-group input[type="checkbox"] {
-            appearance: none;
-            -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            cursor: pointer;
-            position: relative;
-            flex-shrink: 0;
-            margin-top: 2px;
-            transition: var(--transition);
-        }
-
-        .terms-group input[type="checkbox"]:checked {
-            background-color: var(--accent-blue);
-            border-color: var(--accent-blue);
-        }
-
-        .terms-group input[type="checkbox"]:checked::after {
-            content: '\f00c';
-            font-family: 'Font Awesome 6 Free';
-            font-weight: 900;
-            position: absolute;
-            color: white;
-            font-size: 10px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .terms-text {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .terms-text a {
-            color: var(--accent-blue);
-            text-decoration: none;
-            transition: var(--transition);
-        }
-
-        .terms-text a:hover {
-            color: var(--accent-gold);
-            text-decoration: underline;
-        }
+/* Terms checkbox */
+.terms-group { display:flex; align-items:flex-start; gap:12px; margin-top:8px; }
+.terms-group input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px; border: 1px solid var(--input-border);
+  border-radius: 4px; cursor: pointer; position: relative; flex-shrink: 0; margin-top: 2px; transition: var(--transition);
+}
+.terms-group input[type="checkbox"]:checked { background-color: var(--accent-blue); border-color: var(--accent-blue); }
+.terms-group input[type="checkbox"]:checked::after {
+  content: '\\2713'; position: absolute; color: white; font-size: 12px; top: 50%; left: 50%; transform: translate(-50%, -50%);
+}
+.terms-text { font-size: 13px; color: var(--text-secondary); }
+.terms-text a { color: var(--accent-blue); text-decoration: none; transition: var(--transition); }
+.terms-text a:hover { color: var(--accent-gold); text-decoration: underline; }
 `;
