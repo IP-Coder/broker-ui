@@ -13,6 +13,7 @@ import UserProfile from "./pages/UserProfile";
 import ErrorBoundary from "./secure/ErrorBoundary"; // ✅ import
 import Deposit from "./pages/Deposit";
 import Withdrawal from "./pages/Withdrawal";
+import Support from "./pages/Support";
 
 export default function App() {
   const isAuthenticated = !!localStorage.getItem("token");
@@ -63,6 +64,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Withdrawal />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <ProtectedRoute>
+                <Support />
               </ProtectedRoute>
             }
           />
