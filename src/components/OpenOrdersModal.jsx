@@ -118,7 +118,7 @@ export default function OpenOrdersModal({ isOpen, onClose }) {
         className="absolute inset-0 bg-black bg-opacity-50"
         onClick={onClose}
       />
-      <div className="relative bg-[#1A1C1F] rounded-lg shadow-lg overflow-hidden w-full max-w-5xl mx-4">
+      <div className="relative bg-[#1A1C1F] rounded-lg shadow-lg overflow-hidden w-full max-w-11xl mx-4">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <h2 className="text-lg font-semibold text-white">Open Orders</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">

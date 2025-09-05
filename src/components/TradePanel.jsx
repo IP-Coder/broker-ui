@@ -3,15 +3,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { socket } from "../socketClient"; // ✅ Socket.IO client
 import { Toast } from "../noti/Toast";
 import { useNotificationSound } from "../noti/useNotificationSound";
+import { flagsData } from "./flagsdata"; // ✅ country code to flag mapping
 const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID;
+import UpIcon from "../assets/icons/up.svg"; // ⬆ आपका SVG
+import DownIcon from "../assets/icons/down.svg"; // ⬇ आपका SVG
 
 // Helpers
-const getFlagUrl = (symbol) => {
-  if (symbol.startsWith("EUR")) return "/flags/eur.svg";
-  if (symbol.startsWith("USD")) return "/flags/usd.svg";
-  if (symbol.startsWith("GBP")) return "/flags/gbp.svg";
-  return "/flags/usd.svg";
-};
 
 // 1 pip = 0.0001 for EURUSD
 const PIP_VALUE_PER_LOT = 0.1;
@@ -51,6 +48,17 @@ export default function TradePanel({
 
   const [lotValueUSD, setLotValueUSD] = useState("--");
   const [requiredMargin, setRequiredMargin] = useState("--");
+  // const [tradeSize, setTradeSize] = useState(0.01);
+
+  const increase = () => setTradeSize((prev) => +(prev + 0.01).toFixed(2));
+  const decrease = () =>
+    setTradeSize((prev) => Math.max(0.01, +(prev - 0.01).toFixed(2)));
+  const flatFlags = Array.isArray(flagsData[0]) ? flagsData[0] : flagsData;
+  const baseCode = symbol.slice(0, 3);
+  const quoteCode = symbol.slice(3, 6);
+
+  const baseFlagObj = flatFlags.find((f) => f.code === baseCode);
+  const quoteFlagObj = flatFlags.find((f) => f.code === quoteCode);
 
   // Subscribe to live ticks
   useEffect(() => {
@@ -273,31 +281,72 @@ export default function TradePanel({
 
       {/* Symbol header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[#323848]">
-        <img
-          src={getFlagUrl(symbol)}
-          alt=""
-          className="w-6 h-6 rounded-full ring-1 ring-gray-600"
-        />
-        <h2 className="text-lg font-bold">
+        <span className="w-2/6 flex items-center gap-2 text-white text-sm font-medium truncate">
+          {/* Flags Circle */}
+          <span className="relative flex w-8 h-5">
+            <img
+              src={baseFlagObj?.flag}
+              // alt={asset.symbol.slice(0, 3)}
+              className="absolute left-0 w-5 h-5 rounded-full border border-gray-800"
+            />
+
+            <img
+              src={quoteFlagObj?.flag}
+              // alt={asset.symbol.slice(3, 6)}
+              className="absolute right-0 w-5 h-5 rounded-full border border-gray-800"
+            />
+          </span>
           {symbol.slice(0, 3)}/{symbol.slice(3)}
-        </h2>
+        </span>
       </div>
 
       {/* Body */}
       <div className="px-4 py-3 space-y-4">
         {/* Size & Metrics */}
         <div>
+          {/* Label */}
           <label className="text-xs text-gray-400 mb-1 block">
             Select a trade size
           </label>
-          <div className="flex items-center bg-[#1A1F27] rounded-md p-1 mb-3">
+
+          {/* Box */}
+          <div className="flex items-center bg-[#1A1F27] rounded-md border border-gray-700 px-2 py-1 mb-3 justify-between">
+            {/* Input */}
             <input
               type="number"
               step="0.01"
+              min="0.01"
               value={tradeSize}
               onChange={(e) => setTradeSize(Math.max(0.01, +e.target.value))}
-              className="mx-2 w-16 bg-transparent text-center outline-none"
+              className="flex-1 bg-transparent text-white text-sm outline-none px-1"
             />
+
+            {/* Buttons (stacked vertically) */}
+            {/* <div className="flex flex-col ml-2 border-l border-gray-700"> */}
+            <button
+              type="button"
+              onClick={increase}
+              className="w-6 h-5 flex items-center justify-center text-gray-300 me-1 hover:text-white"
+            >
+              <img
+                src={UpIcon}
+                alt="Increase"
+                className="w-6 h-6 bg-gray-500 rounded-sm"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={decrease}
+              className="w-6 h-5 flex items-center justify-center text-gray-300 ms-1 hover:text-white"
+            >
+              {/* Same icon rotated 180° */}
+              <img
+                src={UpIcon}
+                alt="Decrease"
+                className="w-6 h-6 transform rotate-180  bg-gray-500 rounded-sm"
+              />
+            </button>
+            {/* </div> */}
           </div>
           <div className="text-xs text-gray-400 space-y-1 mb-4">
             <div className="flex justify-between">

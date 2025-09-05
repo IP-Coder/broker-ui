@@ -67,7 +67,7 @@ export default function TradeHistoryModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
-      <div className="bg-gray-900 text-gray-100 w-full sm:w-[900px] max-h-[80vh] rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-gray-900 text-gray-100 relative rounded-lg shadow-lg overflow-hidden w-full max-w-11xl mx-4">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
           <h2 className="text-lg font-semibold">Trade History</h2>
           <button

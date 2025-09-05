@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { socket } from "../socketClient"; // ✅ Updated to use Socket.IO
-
+import { flagsData } from "./flagsdata"; // ✅ country code to flag mapping
 // Helper for asset categories
 const getCategory = (symbolObj) => {
   if (!symbolObj) return "Currencies";
@@ -12,6 +12,7 @@ const getCategory = (symbolObj) => {
 };
 
 export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
+  const flatFlags = Array.isArray(flagsData[0]) ? flagsData[0] : flagsData;
   const [symbols, setSymbols] = useState([]);
   const [tab, setTab] = useState("Currencies");
   const [favourites, setFavourites] = useState([]);
@@ -26,21 +27,32 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/symbols`);
         const { symbols: raw = [] } = await res.json();
-        const mapped = raw.map((s) => ({
-          ...s,
-          safeSymbol: s.symbol.replace(":", "_"),
-          price: null,
-          changePercent: null,
-          direction: "same",
-          initialPrice: null,
-          high: null,
-          low: null,
-          ask: null,
-          bid: null,
-          askSize: null,
-          bidSize: null,
-        }));
+        const mapped = raw.map((s) => {
+          const baseCode = s.symbol.slice(0, 3);
+          const quoteCode = s.symbol.slice(3, 6);
+
+          const baseFlagObj = flatFlags.find((f) => f.code === baseCode);
+          const quoteFlagObj = flatFlags.find((f) => f.code === quoteCode);
+
+          return {
+            ...s,
+            safeSymbol: s.symbol.replace(":", "_"),
+            baseFlag: baseFlagObj?.flag || null,
+            quoteFlag: quoteFlagObj?.flag || null,
+            price: null,
+            changePercent: null,
+            direction: "same",
+            initialPrice: null,
+            high: null,
+            low: null,
+            ask: null,
+            bid: null,
+            askSize: null,
+            bidSize: null,
+          };
+        });
         setSymbols(mapped);
+        console.log("Symbols loaded:", mapped);
       } catch (err) {
         console.error("Failed to load symbols", err);
       }
@@ -175,7 +187,34 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
       window.removeEventListener("resize", checkArrows);
     };
   }, [tab]);
+  function formatSixDigits(raw) {
+    if (raw == null || raw === "") return "--";
 
+    const n = Number(raw);
+    if (Number.isNaN(n)) return "--";
+
+    const neg = n < 0;
+    let s = Math.abs(n).toString();
+
+    // Handle scientific notation safely
+    if (/e/i.test(s)) {
+      s = Math.abs(n).toFixed(20); // plenty of decimals to slice later
+    }
+
+    let [intPart, fracPart = ""] = s.split(".");
+
+    // If integer already has 6+ digits, take first 6 and drop decimals
+    if (intPart.length >= 6) {
+      const trimmed = intPart.slice(0, 6);
+      return (neg ? "-" : "") + trimmed;
+    }
+
+    // Otherwise, take just enough decimals to make total digits = 6
+    const need = 6 - intPart.length;
+    const frac = (fracPart || "").padEnd(need, "0").slice(0, need);
+
+    return (neg ? "-" : "") + intPart + "." + frac;
+  }
   return (
     <aside className="bg-[#222733] p-4 border-r border-gray-800 flex flex-col">
       {/* Search Input */}
@@ -257,10 +296,28 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     : "hover:bg-[#1E2A47]"
                 }`}
               >
-                <span className="w-2/6 text-white text-sm font-medium truncate">
+                <span className="w-2/6 flex items-center gap-2 text-white text-sm font-medium truncate">
+                  {/* Flags Circle */}
+                  <span className="relative flex w-8 h-5">
+                    {asset.baseFlag && (
+                      <img
+                        src={asset.baseFlag}
+                        alt={asset.symbol.slice(0, 3)}
+                        className="absolute left-0 w-5 h-5 rounded-full border border-gray-800"
+                      />
+                    )}
+                    {asset.quoteFlag && (
+                      <img
+                        src={asset.quoteFlag}
+                        alt={asset.symbol.slice(3, 6)}
+                        className="absolute right-0 w-5 h-5 rounded-full border border-gray-800"
+                      />
+                    )}
+                  </span>
                   {asset.title}
                 </span>
-                <span className="w-1/6 text-right text-gray-200 text-sm">
+
+                <span className="w-1/6 text-center text-gray-200 text-sm">
                   {asset.price != null
                     ? asset.price.toFixed(asset.decimals ?? 5)
                     : "--"}
@@ -278,11 +335,11 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     ? `${asset.changePercent.toFixed(2)}%`
                     : "--"}
                 </span>
-                <span className="w-2/6 text-right text-gray-400 text-sm truncate">
+                <span className="w-2/6 text-start text-gray-300 text-sm truncate">
                   {asset.high != null && asset.low != null
-                    ? `${asset.high.toFixed(
-                        asset.decimals ?? 5
-                      )}/${asset.low.toFixed(asset.decimals ?? 5)}`
+                    ? `${formatSixDigits(asset.high)}/${formatSixDigits(
+                        asset.low
+                      )}`
                     : "--/--"}
                 </span>
                 <button

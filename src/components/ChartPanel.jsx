@@ -5,7 +5,7 @@ const TV_SCRIPT_SRC = "https://s3.tradingview.com/tv.js";
 
 export default function ChartPanel({
   symbol = "EURUSD",
-  interval = "60",
+  interval = "5",
   theme = "dark",
   locale = "en",
   autosize = true,

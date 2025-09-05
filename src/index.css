@@ -71,8 +71,8 @@ button:focus-visible {
 
 /* ---- Global thin line scrollbars ---- */
 :root {
-  --sb-thumb: rgba(0, 0, 0, 0.45);   /* tweak color to taste */
-  --sb-thumb-hover: rgba(0, 0, 0, 0.65);
+  --sb-thumb: #181C23;   /* tweak color to taste */
+  --sb-thumb-hover: #181C23;
   --sb-track: transparent;           /* keep track invisible */
 }
 
@@ -84,8 +84,8 @@ html, * {
 
 /* Chrome, Edge (Chromium), Safari */
 *::-webkit-scrollbar {
-  width: 2px;                                /* vertical scrollbar thickness */
-  height: 2px;                               /* horizontal scrollbar thickness */
+  width: 0px;                                /* vertical scrollbar thickness */
+  height: 0px;                               /* horizontal scrollbar thickness */
   background: var(--sb-track);
 }
 
@@ -112,4 +112,16 @@ html, * {
 /* Hide the corner where two scrollbars meet */
 *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Hide default arrows in Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide default arrows in Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
 }

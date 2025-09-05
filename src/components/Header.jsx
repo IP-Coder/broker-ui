@@ -1,13 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+import api from "../api/axios"; // <-- added to fetch /me (same as UserProfile)
 
-/**
- * Header: pixel-aligned to your screenshot and mobile responsive.
- * - Left: Logo
- * - Tools: Language (🇬🇧 dropdown) • Fullscreen • Info • Support (headset) • DEMO • Avatar (A dropdown)
- * - Right: "Banking" link + green "Deposit" button
- * - On mobile: tools collapse under a three-dot menu; Deposit stays visible.
- */
 export default function Header() {
   const navigate = useNavigate();
 
@@ -21,6 +15,9 @@ export default function Header() {
   const userRef = useRef(null);
   const bankingRef = useRef(null);
   const moreRef = useRef(null);
+
+  // NEW: user state
+  const [user, setUser] = useState(null);
 
   // click-outside to close menus
   useEffect(() => {
@@ -38,6 +35,18 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // NEW: Fetch /me to get account_type and name/first_name
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get("/me");
+        setUser(res.data || null);
+      } catch (err) {
+        console.error("Failed to fetch user", err);
+      }
+    })();
+  }, []);
+
   // actions
   function handleLogout() {
     localStorage.removeItem("token");
@@ -50,13 +59,31 @@ export default function Header() {
     else d.exitFullscreen?.();
   }
 
+  // --- derived display fields ---
+  const accountTypeRaw = (user?.account_type || user?.accountType || "")
+    .toString()
+    .toLowerCase();
+  const accountTypeLabel =
+    accountTypeRaw === "live"
+      ? "LIVE"
+      : accountTypeRaw === "demo"
+      ? "DEMO"
+      : "DEMO";
+
+  const avatarInitial = (
+    user?.first_name?.trim()?.[0] ||
+    user?.name?.trim()?.[0] ||
+    user?.username?.trim()?.[0] ||
+    user?.email?.trim()?.[0] ||
+    "U"
+  ).toUpperCase();
+
   const brand = (
     <button
       onClick={() => navigate("/dashboard")}
       className="flex items-center gap-2"
       aria-label="BullMarkets home"
     >
-      {/* Simple geometric logo matching vibe */}
       <span className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-emerald-500">
         <svg viewBox="0 0 24 24" className="w-5 h-5 text-white">
           <path d="M4 18L12 4l8 14H4z" fill="currentColor" />
@@ -156,7 +183,7 @@ export default function Header() {
                   <path d="M11 11h2v7h-2z" fill="currentColor" />
                 </svg>
               </Link>
-              {/* Support (headset) */}
+              {/* Support */}
               <Link
                 to="/support"
                 title="Support"
@@ -178,10 +205,12 @@ export default function Header() {
                 </svg>
               </Link>
 
-              {/* DEMO + Avatar */}
+              {/* Account type badge (LIVE/DEMO) */}
               <span className="text-xs font-extrabold text-[#0B1B7F] tracking-wider select-none">
-                DEMO
+                {accountTypeLabel}
               </span>
+
+              {/* Avatar + menu */}
               <div className="relative" ref={userRef}>
                 <button
                   onClick={() => setOpenUser((v) => !v)}
@@ -189,8 +218,14 @@ export default function Header() {
                   aria-haspopup="menu"
                   aria-expanded={openUser}
                 >
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-[#0B1B7F] font-bold">
-                    A
+                  <span
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-[#0B1B7F] font-bold"
+                    aria-label={user?.name || user?.first_name || "User"}
+                    title={
+                      user?.name || user?.first_name || user?.email || "User"
+                    }
+                  >
+                    {avatarInitial}
                   </span>
                   <svg
                     className="w-3 h-3 text-[#0B1B7F]"
@@ -206,16 +241,16 @@ export default function Header() {
                   </svg>
                 </button>
                 {openUser && (
-                  <div className="absolute right-0 mt-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 mt-2 p-2 w-44 rounded-md border border-gray-200 bg-white shadow-lg">
                     <Link
                       to="/profile"
-                      className="block px-3 py-2 hover:bg-gray-50"
+                      className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
                     >
                       Profile
                     </Link>
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50"
                     >
                       Logout
                     </button>
@@ -224,7 +259,7 @@ export default function Header() {
               </div>
             </div>
 
-            {/* Mobile "more" menu for tools */}
+            {/* Mobile "more" */}
             <div className="md:hidden relative" ref={moreRef}>
               <button
                 onClick={() => setOpenMore((v) => !v)}
@@ -241,6 +276,13 @@ export default function Header() {
               </button>
               {openMore && (
                 <div className="absolute left-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <div className="px-3 pt-2 pb-1 text-xs text-gray-600">
+                    Account Type
+                  </div>
+                  <div className="px-3 pb-2 text-xs font-extrabold text-[#0B1B7F] tracking-wider">
+                    {accountTypeLabel}
+                  </div>
+                  <div className="border-t my-1"></div>
                   <button
                     onClick={toggleFullscreen}
                     className="w-full text-left px-3 py-2 hover:bg-gray-50"
@@ -277,7 +319,7 @@ export default function Header() {
 
           {/* Right cluster */}
           <div className="flex items-center gap-4">
-            {/* Banking (opens dropdown to Deposit / Withdrawal) */}
+            {/* Banking */}
             <div className="relative hidden sm:block" ref={bankingRef}>
               <button
                 onClick={() => setOpenBanking((v) => !v)}
@@ -305,7 +347,7 @@ export default function Header() {
               )}
             </div>
 
-            {/* Deposit button */}
+            {/* Deposit */}
             <button
               onClick={() => navigate("/deposit")}
               className="px-4 sm:px-5 py-2 rounded-lg bg-emerald-400 text-[#0B1B7F] font-semibold hover:brightness-95 active:brightness-90"

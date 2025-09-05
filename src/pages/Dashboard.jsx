@@ -4,6 +4,7 @@ import TradePanel from "../components/TradePanel";
 import ChartPanel from "../components/ChartPanel";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import "../styles/mobile-dashboard.css";
 
 export default function Dashboard() {
   const [selectedSymbol, setSelectedSymbol] = useState("EURUSD");
