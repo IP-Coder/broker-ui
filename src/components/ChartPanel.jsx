@@ -52,7 +52,10 @@ export default function ChartPanel({
     // Create new widget
     widgetRef.current = new window.TradingView.widget({
       autosize,
-      symbol: `OANDA:${symbol}`,
+      symbol:
+        symbol === "BTCUSDT" || symbol === "ETHUSDT"
+          ? `BINANCE:${symbol}`
+          : `OANDA:${symbol}`,
       interval,
       timezone: "exchange",
       theme,

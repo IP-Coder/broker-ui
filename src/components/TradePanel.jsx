@@ -63,7 +63,7 @@ export default function TradePanel({
   // Subscribe to live ticks
   useEffect(() => {
     const handleTick = (data) => {
-      const incoming = data.code?.replace("OANDA:", "");
+      const incoming = data.code?.replace(/(OANDA:|BINANCE:)/g, "");
       if (incoming !== symbol) return;
       if (data.bid) setBidPrice(parseFloat(data.bid));
       if (data.ask) setAskPrice(parseFloat(data.ask));

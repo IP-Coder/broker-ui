@@ -39,7 +39,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
             safeSymbol: s.symbol.replace(":", "_"),
             baseFlag: baseFlagObj?.flag || null,
             quoteFlag: quoteFlagObj?.flag || null,
-            price: null,
+            price: s.last_price,
             changePercent: null,
             direction: "same",
             initialPrice: null,
@@ -52,7 +52,6 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
           };
         });
         setSymbols(mapped);
-        console.log("Symbols loaded:", mapped);
       } catch (err) {
         console.error("Failed to load symbols", err);
       }
@@ -62,8 +61,8 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
   // 2️⃣ Subscribe to WebSocket
   useEffect(() => {
     socket.on("tick", (data) => {
-      const incoming = data.code.replace("OANDA:", "");
-
+      // console.log("Tick received:", data);
+      const incoming = data.code.replace(/(OANDA:|BINANCE:)/g, "");
       setSymbols((prev) =>
         prev.map((a) => {
           if (a.safeSymbol !== incoming) return a;
@@ -215,6 +214,34 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
 
     return (neg ? "-" : "") + intPart + "." + frac;
   }
+  function formatEightDigits(raw) {
+    if (raw == null || raw === "") return "--";
+
+    const n = Number(raw);
+    if (Number.isNaN(n)) return "--";
+
+    const neg = n < 0;
+    let s = Math.abs(n).toString();
+
+    // Handle scientific notation safely
+    if (/e/i.test(s)) {
+      s = Math.abs(n).toFixed(20); // plenty of decimals to slice later
+    }
+
+    let [intPart, fracPart = ""] = s.split(".");
+
+    // If integer already has 6+ digits, take first 6 and drop decimals
+    if (intPart.length >= 8) {
+      const trimmed = intPart.slice(0, 6);
+      return (neg ? "-" : "") + trimmed;
+    }
+
+    // Otherwise, take just enough decimals to make total digits = 8
+    const need = 8 - intPart.length;
+    const frac = (fracPart || "").padEnd(need, "0").slice(0, need);
+
+    return (neg ? "-" : "") + intPart + "." + frac;
+  }
   return (
     <aside className="bg-[#222733] p-4 border-r border-gray-800 flex flex-col">
       {/* Search Input */}
@@ -318,9 +345,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                 </span>
 
                 <span className="w-1/6 text-center text-gray-200 text-sm">
-                  {asset.price != null
-                    ? asset.price.toFixed(asset.decimals ?? 5)
-                    : "--"}
+                  {asset.price != null ? formatEightDigits(asset.price) : "--"}
                 </span>
                 <span
                   className={`w-1/6 flex justify-end items-center text-sm ${
@@ -333,9 +358,9 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                 >
                   {asset.changePercent != null
                     ? `${asset.changePercent.toFixed(2)}%`
-                    : "--"}
+                    : "0.00%"}
                 </span>
-                <span className="w-2/6 text-start text-gray-300 text-sm truncate">
+                <span className="w-2/6 text-center text-gray-300 text-sm truncate">
                   {asset.high != null && asset.low != null
                     ? `${formatSixDigits(asset.high)}/${formatSixDigits(
                         asset.low

@@ -1,9 +1,12 @@
+// src/components/Dashboard.jsx - Updated with Mobile Support
 import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import TradePanel from "../components/TradePanel";
 import ChartPanel from "../components/ChartPanel";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import MobileDashboard from "../components/MobileDashboard";
+import { useMobile } from "../hooks/useMobile";
 import "../styles/mobile-dashboard.css";
 
 export default function Dashboard() {
@@ -11,6 +14,7 @@ export default function Dashboard() {
   const [ohlcData, setOhlcData] = useState([]);
   const [user, setUser] = useState(null);
   const [reloadOpen, setReloadOpen] = useState(0);
+  const isMobile = useMobile();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -24,6 +28,16 @@ export default function Dashboard() {
       .then((res) => res.json())
       .then((res) => setOhlcData(res.data || []));
   }, [selectedSymbol]);
+
+  // Handle trade success callback
+  const handleTradeSuccess = (order) => {
+    setReloadOpen((prev) => prev + 1);
+  };
+
+  // If mobile, render the dedicated mobile dashboard
+  if (isMobile) {
+    return <MobileDashboard />;
+  }
 
   return (
     <div className="bg-[#181C23] min-h-screen h-screen flex flex-col">
