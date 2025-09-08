@@ -9,7 +9,7 @@ import MobileDashboard from "../components/MobileDashboard";
 import { useMobile } from "../hooks/useMobile";
 import "../styles/mobile-dashboard.css";
 
-export default function Dashboard() {
+export default function Dashboard({ isDemo, setIsDemo }) {
   const [selectedSymbol, setSelectedSymbol] = useState("EURUSD");
   const [ohlcData, setOhlcData] = useState([]);
   const [user, setUser] = useState(null);
@@ -41,7 +41,7 @@ export default function Dashboard() {
 
   return (
     <div className="bg-[#181C23] min-h-screen h-screen flex flex-col">
-      <Header />
+      <Header isDemo={isDemo} setIsDemo={setIsDemo} />
       <div className="flex flex-1 overflow-hidden h-full">
         <div className="basis-[25%] flex-shrink-0 max-w-[30vw] h-full overflow-y-auto">
           <Sidebar

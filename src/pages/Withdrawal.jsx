@@ -4,11 +4,11 @@ import Header from "../components/Header";
 import api from "../api/axios";
 
 /* ---------- Page ---------- */
-export default function Banking() {
+export default function Banking({ isDemo }) {
   const [activeTab, setActiveTab] = useState("withdrawal"); // 'withdrawal' | 'pending' | 'history'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  console.log("isDemo", isDemo);
   async function fetchTransactions() {
     try {
       setLoading(true);

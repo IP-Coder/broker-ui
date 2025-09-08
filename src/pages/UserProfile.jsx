@@ -23,7 +23,7 @@ const DIAL_CODES = [
 ];
 
 export default function UserProfile() {
-  const [tab, setTab] = useState("personal"); // 'personal' | 'account' | 'password'
+  const [tab, setTab] = useState("personal"); // 'personal' | 'account' | 'password' | 'referral'
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState({ ok: "", err: "" });
 
@@ -39,15 +39,12 @@ export default function UserProfile() {
     postal_code: "",
     city: "",
     country: "India",
-    // account
     email: "",
     phone_code: "+91",
     phone: "",
-    phone2_code: "+44",
-    phone2: "",
     email2: "",
-    // username (readonly hint)
     username: "",
+    account_type: "demo", // 'demo' | 'live'
   });
 
   // password tab state
@@ -55,6 +52,16 @@ export default function UserProfile() {
     old_password: "",
     new_password: "",
     show: false,
+  });
+
+  // referral tab state
+  const [ref, setRef] = useState({
+    loading: false,
+    code: "",
+    referred_count: 0,
+    total_reward: 0,
+    history: [],
+    error: "",
   });
 
   useEffect(() => {
@@ -76,11 +83,10 @@ export default function UserProfile() {
           country: u.country || p.country,
           email: u.email || "",
           phone_code: u.phone_code || p.phone_code,
-          phone: u.mobile || u.phone || "",
-          phone2_code: u.phone2_code || p.phone2_code,
-          phone2: u.phone2 || "",
+          mobile: u.mobile || u.phone || "",
           email2: u.email2 || "",
           username: u.username || u.email || "",
+          account_type: u.account_type || "demo",
         }));
       } catch (e) {
         setMsg({ ok: "", err: "Unable to load profile." });
@@ -89,6 +95,56 @@ export default function UserProfile() {
       }
     })();
   }, []);
+
+  // Fetch referral data on first switch to referral tab (lazy load)
+  useEffect(() => {
+    if (tab !== "referral" || ref.loading || ref.code) return;
+    (async () => {
+      try {
+        setRef((s) => ({ ...s, loading: true, error: "" }));
+        const [myRes, histRes] = await Promise.allSettled([
+          api.get("/refer/my"),
+          api.get("/refer/history"),
+        ]);
+
+        let code = "";
+        let referred_count = 0;
+        let total_reward = 0;
+        let history = [];
+
+        if (myRes.status === "fulfilled") {
+          const d = myRes.value?.data || {};
+          code = d.code || "";
+          referred_count = Number(d.referred_count || 0);
+          total_reward = Number(d.total_reward || 0);
+        } else {
+          throw new Error("Unable to load referral info.");
+        }
+
+        if (histRes.status === "fulfilled") {
+          history = Array.isArray(histRes.value?.data)
+            ? histRes.value.data
+            : [];
+        } // if failed, just keep empty history silently
+
+        setRef({
+          loading: false,
+          code,
+          referred_count,
+          total_reward,
+          history,
+          error: "",
+        });
+      } catch (e) {
+        setRef((s) => ({
+          ...s,
+          loading: false,
+          error: "Unable to load referral info.",
+        }));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   // ----- helpers -----
   function update(field, value) {
@@ -187,6 +243,11 @@ export default function UserProfile() {
                 label="Change Password"
                 active={tab === "password"}
                 onClick={() => setTab("password")}
+              />
+              <TabButton
+                label="Referral"
+                active={tab === "referral"}
+                onClick={() => setTab("referral")}
               />
             </div>
           </div>
@@ -333,28 +394,8 @@ export default function UserProfile() {
                     <div className="col-span-2">
                       <Input
                         placeholder="Primary Phone"
-                        value={profile.phone}
-                        onChange={(e) => update("phone", e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    <Select
-                      value={profile.phone2_code}
-                      onChange={(e) => update("phone2_code", e.target.value)}
-                    >
-                      {DIAL_CODES.map((d) => (
-                        <option key={d.code} value={d.code}>
-                          {d.code}
-                        </option>
-                      ))}
-                    </Select>
-                    <div className="col-span-2">
-                      <Input
-                        placeholder="Secondary Phone"
-                        value={profile.phone2}
-                        onChange={(e) => update("phone2", e.target.value)}
+                        value={profile.mobile}
+                        onChange={(e) => update("mobile", e.target.value)}
                       />
                     </div>
                   </div>
@@ -387,7 +428,7 @@ export default function UserProfile() {
                   <Button type="submit">Update</Button>
                 </div>
               </form>
-            ) : (
+            ) : tab === "password" ? (
               <form
                 onSubmit={changePassword}
                 className="grid grid-cols-1 lg:grid-cols-2 gap-6"
@@ -438,6 +479,16 @@ export default function UserProfile() {
                   </Req>
                 </section>
               </form>
+            ) : (
+              <ReferralTab
+                refState={ref}
+                setRefState={setRef}
+                onCopied={(t) => {
+                  // lightweight toast
+                  setMsg({ ok: t, err: "" });
+                  setTimeout(() => setMsg({ ok: "", err: "" }), 1200);
+                }}
+              />
             )}
 
             {/* global messages */}
@@ -458,6 +509,138 @@ export default function UserProfile() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+/* ---------- Referral Tab ---------- */
+function ReferralTab({ refState, setRefState, onCopied }) {
+  const { loading, code, referred_count, total_reward, history, error } =
+    refState;
+
+  const link = useMemo(() => {
+    if (!code) return "";
+    const base =
+      import.meta?.env?.VITE_PUBLIC_SIGNUP_URL ||
+      (typeof window !== "undefined"
+        ? `${window.location.origin}/register`
+        : "/register");
+    return `${base}?ref=${encodeURIComponent(code)}`;
+  }, [code]);
+
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      onCopied?.("Referral link copied!");
+    } catch {
+      onCopied?.("Could not copy link.");
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <h3 className="text-lg font-bold mb-3">Refer & Earn</h3>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="bg-[#121829] border border-[#2A3245] rounded-md p-4 md:col-span-2">
+            <div className="text-sm text-gray-300 mb-1">Your referral link</div>
+            {loading ? (
+              <div className="h-11 rounded-md bg-[#0f1524] animate-pulse" />
+            ) : code ? (
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={link}
+                  className="flex-1 h-11 rounded-md bg-[#0f1524] border border-[#2A3245] px-3 text-white text-sm"
+                />
+                <Button type="button" onClick={copy}>
+                  Copy
+                </Button>
+              </div>
+            ) : (
+              <div className="text-gray-400">No referral code available.</div>
+            )}
+
+            <div className="mt-3 text-xs text-gray-400">
+              Share this link with friends. When they sign up using it, you earn
+              rewards.
+            </div>
+          </div>
+
+          <div className="bg-[#121829] border border-[#2A3245] rounded-md p-4">
+            <div className="text-sm text-gray-300">Overview</div>
+            <div className="mt-2">
+              {loading ? (
+                <div className="h-20 rounded-md bg-[#0f1524] animate-pulse" />
+              ) : (
+                <>
+                  <div className="text-sm text-gray-400">Total Referred</div>
+                  <div className="text-2xl font-extrabold">
+                    {referred_count || 0}
+                  </div>
+                  <div className="mt-2 text-sm text-gray-400">Total Reward</div>
+                  <div className="text-xl font-bold">
+                    {formatMoney(total_reward || 0)}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4 className="text-lg font-bold mb-3">Referral History</h4>
+        <div className="bg-[#121829] border border-[#2A3245] rounded-md overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#2A3245] text-sm text-gray-300">
+            Your referrals and rewards
+          </div>
+
+          {loading ? (
+            <div className="p-4">
+              <div className="h-8 w-full bg-[#0f1524] rounded mb-2 animate-pulse" />
+              <div className="h-8 w-full bg-[#0f1524] rounded mb-2 animate-pulse" />
+              <div className="h-8 w-full bg-[#0f1524] rounded animate-pulse" />
+            </div>
+          ) : error ? (
+            <div className="p-4 text-red-300 text-sm">{error}</div>
+          ) : !history?.length ? (
+            <div className="p-4 text-gray-400 text-sm">No referrals yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-[#0f1524] text-gray-300">
+                  <tr>
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2">User</th>
+                    <th className="px-4 py-2">Reward</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((r) => {
+                    const when = formatDate(r.created_at);
+                    const who =
+                      r.referred_name ||
+                      r.referred_email ||
+                      r.user_email ||
+                      r.user_name ||
+                      "-";
+                    const reward = formatMoney(r.reward_amount || 0);
+                    return (
+                      <tr key={r.id} className="border-t border-[#2A3245]">
+                        <td className="px-4 py-2 text-gray-300">{when}</td>
+                        <td className="px-4 py-2">{who}</td>
+                        <td className="px-4 py-2">{reward}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -540,4 +723,27 @@ function Req({ ok, children }) {
       </span>
     </div>
   );
+}
+
+/* ---------- tiny utils ---------- */
+function formatDate(input) {
+  if (!input) return "-";
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return String(input);
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+}
+function formatMoney(n) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    }).format(Number(n || 0));
+  } catch {
+    return `$${Number(n || 0).toFixed(2)}`;
+  }
 }

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
-
+import { useEffect } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 export default function Login() {
   const navigate = useNavigate();
 
@@ -28,6 +29,18 @@ export default function Login() {
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [signupError, setSignupError] = useState("");
 
+  // Referral
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const [refCode, setRefCode] = useState("");
+  useEffect(() => {
+    const path = (location.pathname || "").toLowerCase();
+    const ref = searchParams.get("ref");
+    if (ref) setRefCode(ref);
+    if (path.includes("/register") || ref) {
+      setMode("signup");
+    }
+  }, [location.pathname, location.search, searchParams]);
   // ---- handlers ----
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -65,6 +78,7 @@ export default function Login() {
         password: signupPassword,
         password_confirmation: signupPassword,
         account_type: accountType, // 'demo' | 'live'
+        referral_code: refCode || undefined,
       });
 
       if (data?.token) {
