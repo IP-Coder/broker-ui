@@ -126,43 +126,7 @@ export default function Login() {
       </svg>
     );
 
-  const GoogleIcon = () => (
-    <svg viewBox="0 0 48 48" width="20" height="20">
-      <path
-        fill="#FFC107"
-        d="M43.6 20.5H42V20H24v8h11.3C33.8 32.5 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.1-.4-3.5z"
-      />
-      <path
-        fill="#FF3D00"
-        d="M6.3 14.7l6.6 4.8C14.8 16.5 19 14 24 14c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6 29.5 4 24 4 15.4 4 8.2 8.9 6.3 14.7z"
-      />
-      <path
-        fill="#4CAF50"
-        d="M24 44c5.2 0 10-2 13.6-5.3l-6.3-5.2C29.1 35.5 26.7 36 24 36c-5.2 0-9.7-3.3-11.3-8l-6.5 5C8.1 38.8 15.5 44 24 44z"
-      />
-      <path
-        fill="#1976D2"
-        d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6 8-11.3 8-5.2 0-9.7-3.3-11.3-8l-6.5 5C8.1 38.8 15.5 44 24 44c11.1 0 20-8.9 20-20 0-1.2-.1-2.1-.4-3.5z"
-      />
-    </svg>
-  );
-  const AppleIcon = () => (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-      <path d="M16.365 1.43c0 1.14-.42 2.2-1.2 3.01-.9.96-2.36 1.7-3.59 1.6-.11-1.06.49-2.2 1.22-2.96.9-.97 2.5-1.7 3.57-1.65zM20.74 17.18c-.68 1.57-1.01 2.24-1.89 3.6-1.22 1.86-2.94 4.18-5.07 4.18-1.16 0-1.96-.77-3.26-.77-1.33 0-2.18.77-3.34.77-2.12 0-3.76-2.1-4.98-3.96C.7 18.3-.2 15.18.12 12.24c.28-2.4 1.9-4.57 4.12-4.57 1.2 0 2.22.84 2.96.84.7 0 1.98-.86 3.46-.86 1.06 0 2.56.46 3.5 1.77-.09.05-2.25 1.31-2.23 3.9.02 3.11 2.72 4.14 2.77 4.16-.03.08-.28.98-.96 2.7z" />
-    </svg>
-  );
-  const MetaIcon = () => (
-    <svg
-      viewBox="0 0 64 64"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-    >
-      <path d="M10 41c6-14 16-22 24 0 8-22 18-14 20 0" />
-    </svg>
-  );
+
 
   return (
     <div className="page-pad">
@@ -289,30 +253,6 @@ export default function Login() {
                 <span>Login</span>
               )}
             </button>
-
-            <div className="social-login" aria-hidden={loginLoading}>
-              <button
-                type="button"
-                className="social-btn"
-                title="Login with Google"
-              >
-                <GoogleIcon />
-              </button>
-              <button
-                type="button"
-                className="social-btn"
-                title="Login with Apple"
-              >
-                <AppleIcon />
-              </button>
-              <button
-                type="button"
-                className="social-btn"
-                title="Login with Meta"
-              >
-                <MetaIcon />
-              </button>
-            </div>
           </form>
         ) : (
           <form
@@ -399,30 +339,6 @@ export default function Login() {
                 <span>Start Trading</span>
               )}
             </button>
-
-            <div className="social-login" aria-hidden={signupLoading}>
-              <button
-                type="button"
-                className="social-btn"
-                title="Sign up with Google"
-              >
-                <GoogleIcon />
-              </button>
-              <button
-                type="button"
-                className="social-btn"
-                title="Sign up with Apple"
-              >
-                <AppleIcon />
-              </button>
-              <button
-                type="button"
-                className="social-btn"
-                title="Sign up with Meta"
-              >
-                <MetaIcon />
-              </button>
-            </div>
           </form>
         )}
 
