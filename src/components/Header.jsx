@@ -180,6 +180,12 @@ export default function Header() {
                  >
                    Profile
                  </Link>
+                 <Link
+                   to="/withdrawal"
+                   className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
+                 >
+                   Withdrawal
+                 </Link>
                  <button
                    onClick={handleLogout}
                    className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50"
