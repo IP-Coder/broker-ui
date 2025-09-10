@@ -4,11 +4,32 @@ import Header from "../components/Header";
 import api from "../api/axios";
 
 /* ---------- Page ---------- */
-export default function Banking({ isDemo }) {
+export default function Banking() {
   const [activeTab, setActiveTab] = useState("withdrawal"); // 'withdrawal' | 'pending' | 'history'
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  console.log("isDemo", isDemo);
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get("/me");
+        setUser(res.data || null);
+      } catch (err) {
+        console.error("Failed to fetch user", err);
+      }
+    })();
+  }, []);
+  const accountTypeRaw = (user?.account_type || user?.accountType || "")
+    .toString()
+    .toLowerCase();
+  const accountTypeLabel =
+    accountTypeRaw === "live"
+      ? "LIVE"
+      : accountTypeRaw === "demo"
+      ? "DEMO"
+      : "DEMO";
+  const isDemo = accountTypeRaw !== "live";
+  // console.log("User account type:", accountTypeRaw);
   async function fetchTransactions() {
     try {
       setLoading(true);
@@ -66,23 +87,29 @@ export default function Banking({ isDemo }) {
         </div>
 
         {/* Content */}
-        {activeTab === "withdrawal" && (
-          <section className="mt-6">
-            <h1 className="text-3xl font-extrabold mb-4">Withdrawal</h1>
-            <div className="bg-[#1A2130] border border-[#2A3245] rounded-2xl p-5 sm:p-7">
-              <div className="bg-[#143C2F]/30 border border-emerald-500/30 text-emerald-200 rounded-xl p-4 mb-6 text-sm">
-                Select crypto, enter USD amount, pick the network, then paste{" "}
-                <b>your</b> wallet address.
-              </div>
-              <CryptoWithdrawForm
-                onSubmitted={() => {
-                  fetchTransactions();
-                  setActiveTab("pending");
-                }}
-              />
+        {activeTab === "withdrawal" &&
+          (isDemo ? (
+            <div className="mt-6 rounded-md border border-yellow-500/40 bg-yellow-500/10 text-yellow-200 px-4 py-3">
+              Withdrawals are not available in demo accounts. Please switch to a
+              live account to make a withdrawal.
             </div>
-          </section>
-        )}
+          ) : (
+            <section className="mt-6">
+              <h1 className="text-3xl font-extrabold mb-4">Withdrawal</h1>
+              <div className="bg-[#1A2130] border border-[#2A3245] rounded-2xl p-5 sm:p-7">
+                <div className="bg-[#143C2F]/30 border border-emerald-500/30 text-emerald-200 rounded-xl p-4 mb-6 text-sm">
+                  Select crypto, enter USD amount, pick the network, then paste{" "}
+                  <b>your</b> wallet address.
+                </div>
+                <CryptoWithdrawForm
+                  onSubmitted={() => {
+                    fetchTransactions();
+                    setActiveTab("pending");
+                  }}
+                />
+              </div>
+            </section>
+          ))}
 
         {activeTab === "pending" && (
           <section className="mt-6">
