@@ -136,41 +136,60 @@ export default function Header() {
        <div className="h-14 flex items-center justify-between gap-3">
          {/* Left cluster */}
          <div className="flex items-center gap-3 sm:gap-4">
-           {brand}
-
-           {/* Language */}
-           <div className="relative" ref={langRef}>
+           {/* Mobile "more" */}
+           <div className="md:hidden relative" ref={moreRef}>
              <button
-               onClick={() => setOpenLang((v) => !v)}
-               className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100"
+               onClick={() => setOpenMore((v) => !v)}
+               className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
+               aria-label="More"
                aria-haspopup="menu"
-               aria-expanded={openLang}
+               aria-expanded={openMore}
              >
-               <span className="text-lg text-[#0B1B7F] leading-none">🇬🇧</span>
-               <svg
-                 className="w-3 h-3 text-[#0B1B7F]"
-                 viewBox="0 0 20 20"
-                 fill="currentColor"
-               >
-                 <path
-                   d="M5.5 7.5L10 12l4.5-4.5"
-                   stroke="currentColor"
-                   strokeWidth="2"
-                   fill="none"
-                 />
+               <svg viewBox="0 0 24 24" className="w-6 h-6">
+                 <rect x="3" y="6" width="18" height="2" rx="1" />
+                 <rect x="3" y="11" width="18" height="2" rx="1" />
+                 <rect x="3" y="16" width="18" height="2" rx="1" />
                </svg>
              </button>
-             {openLang && (
-               <div className="absolute mt-2 w-40 rounded-md border border-gray-200 bg-white shadow-lg">
-                 <button className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50">
-                   🇬🇧 English
-                 </button>
-                 <button className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50">
-                   🇮🇳 हिन्दी
+             {openMore && (
+               <div className="absolute left-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                 <div className="px-3 pt-2 pb-1 text-xs text-gray-600">
+                   Account Type
+                 </div>
+                 <div className="px-3 pb-2 text-xs font-extrabold text-[#0B1B7F] tracking-wider">
+                   {accountTypeLabel}
+                 </div>
+                 <div className="border-t my-1"></div>
+                 <Link
+                   to="/info"
+                   className="block px-3 py-2 text-[#0B1B7F] hover:bg-gray-50"
+                 >
+                   Info
+                 </Link>
+                 <Link
+                   to="/support"
+                   className="block px-3 py-2 text-[#0B1B7F] hover:bg-gray-50"
+                 >
+                   Support
+                 </Link>
+                 <div className="border-t my-1"></div>
+                 <div className="px-3 py-2 text-xs text-gray-500">Account</div>
+                 <Link
+                   to="/profile"
+                   className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
+                 >
+                   Profile
+                 </Link>
+                 <button
+                   onClick={handleLogout}
+                   className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50"
+                 >
+                   Logout
                  </button>
                </div>
              )}
            </div>
+           {brand}
 
            {/* Desktop tools */}
            <div className="hidden md:flex items-center gap-2">
@@ -291,63 +310,6 @@ export default function Header() {
                  </div>
                )}
              </div>
-           </div>
-
-           {/* Mobile "more" */}
-           <div className="md:hidden relative" ref={moreRef}>
-             <button
-               onClick={() => setOpenMore((v) => !v)}
-               className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
-               aria-label="More"
-               aria-haspopup="menu"
-               aria-expanded={openMore}
-             >
-               <svg viewBox="0 0 24 24" className="w-6 h-6">
-                 <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-                 <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-                 <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-               </svg>
-             </button>
-             {openMore && (
-               <div className="absolute left-0 mt-2 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
-                 <div className="px-3 pt-2 pb-1 text-xs text-gray-600">
-                   Account Type
-                 </div>
-                 <div className="px-3 pb-2 text-xs font-extrabold text-[#0B1B7F] tracking-wider">
-                   {accountTypeLabel}
-                 </div>
-                 <div className="border-t my-1"></div>
-                 <button
-                   onClick={toggleFullscreen}
-                   className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                 >
-                   Fullscreen
-                 </button>
-                 <Link to="/info" className="block px-3 py-2 hover:bg-gray-50">
-                   Info
-                 </Link>
-                 <Link
-                   to="/support"
-                   className="block px-3 py-2 hover:bg-gray-50"
-                 >
-                   Support
-                 </Link>
-                 <div className="border-t my-1"></div>
-                 <div className="px-3 py-2 text-xs text-gray-500">Account</div>
-                 <Link
-                   to="/profile"
-                   className="block px-3 py-2 text-[#000000] hover:bg-gray-50"
-                 >
-                   Profile
-                 </Link>
-                 <button
-                   onClick={handleLogout}
-                   className="w-full text-left px-3 py-2 text-[#000000] hover:bg-gray-50"
-                 >
-                   Logout
-                 </button>
-               </div>
-             )}
            </div>
          </div>
 

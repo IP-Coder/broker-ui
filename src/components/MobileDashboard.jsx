@@ -10,6 +10,7 @@ import Footer from "./Footer";
 import PendingOrdersModal from "./PendingOrdersModal";
 import OpenOrdersModal from "./OpenOrdersModal";
 import TradeHistoryModal from "./TradeHistoryModal";
+import Header from "./Header";
 
 // Trading constants
 const PIP_VALUE_PER_LOT = 0.1;
@@ -704,8 +705,8 @@ export default function MobileDashboard() {
       `}</style>
 
       {/* Top Bar */}
-      <div className="top-bar">
-        <div className="logo-section" onClick={() => navigate("/dashboard")}>
+      <div className="">
+        {/* <div className="logo-section" onClick={() => navigate("/dashboard")}>
           RoyalsFx
           <span className="info-icon">ℹ️</span>
         </div>
@@ -713,10 +714,11 @@ export default function MobileDashboard() {
           <button className="login" onClick={() => setShowOpen(true)}>
             Trades
           </button>
-          <button className="signup" onClick={handleLogout}>
-            Logout
+          <button className="signup" onClick={() => navigate("/deposit")}>
+            Deposit
           </button>
-        </div>
+        </div> */}
+        <Header />
       </div>
 
       {/* Market Status */}

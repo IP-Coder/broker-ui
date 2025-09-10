@@ -54,6 +54,17 @@ export default function UserProfile() {
     show: false,
   });
 
+  // NEW: KYC state
+  const [kyc, setKyc] = useState({
+    loading: false,
+    status: null, // 'pending' | 'approved' | 'rejected' | null
+    aadhaar_last4: "",
+    document_url: "",
+    selfie_url: "",
+    submitted_at: "",
+    review_notes: "",
+  });
+
   // referral tab state
   const [ref, setRef] = useState({
     loading: false,
@@ -141,6 +152,33 @@ export default function UserProfile() {
           loading: false,
           error: "Unable to load referral info.",
         }));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // NEW: Lazy load KYC when tab opens
+  useEffect(() => {
+    if (tab !== "kyc" || kyc.loading) return;
+    (async () => {
+      try {
+        setKyc((s) => ({ ...s, loading: true }));
+        const { data } = await api.get("/kyc/my"); // new backend
+        if (data?.exists) {
+          setKyc({
+            loading: false,
+            status: data.status,
+            aadhaar_last4: data.aadhaar_last4 || "",
+            document_url: data.document_url || "",
+            selfie_url: data.selfie_url || "",
+            submitted_at: data.submitted_at || "",
+            review_notes: data.review_notes || "",
+          });
+        } else {
+          setKyc((s) => ({ ...s, loading: false }));
+        }
+      } catch {
+        setKyc((s) => ({ ...s, loading: false }));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -239,6 +277,7 @@ export default function UserProfile() {
                 active={tab === "account"}
                 onClick={() => setTab("account")}
               />
+                 <TabButton label="KYC" active={tab === "kyc"} onClick={() => setTab("kyc")} />
               <TabButton
                 label="Change Password"
                 active={tab === "password"}
@@ -428,6 +467,23 @@ export default function UserProfile() {
                   <Button type="submit">Update</Button>
                 </div>
               </form>
+            ) : tab === "kyc" ? (
+              <KycTab
+                state={kyc}
+                onSubmitted={(t) => {
+                  setMsg({ ok: t || "KYC submitted successfully.", err: "" });
+                }}
+                onError={(t) =>
+                  setMsg({ ok: "", err: t || "KYC submission failed." })
+                }
+                onRefresh={async () => {
+                  try {
+                    const { data } = await api.get("/kyc/my");
+                    if (data?.exists)
+                      setKyc((s) => ({ ...s, ...data, loading: false }));
+                  } catch {}
+                }}
+              />
             ) : tab === "password" ? (
               <form
                 onSubmit={changePassword}
@@ -512,6 +568,111 @@ export default function UserProfile() {
     </div>
   );
 }
+
+/* ---------- NEW: KYC Tab ---------- */
+function KycTab({ state, onSubmitted, onError, onRefresh }) {
+  const [aadhaar, setAadhaar] = useState("");
+  const [docFile, setDocFile] = useState(null);
+  const [selfieFile, setSelfieFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const isValidAadhaar = (v) => /^\d{12}$/.test(v);
+  const MAX_MB = 8;
+
+  async function submitKyc(e) {
+    e?.preventDefault?.();
+    if (!isValidAadhaar(aadhaar)) return onError?.("Aadhaar must be exactly 12 digits.");
+    if (!docFile || !selfieFile) return onError?.("Please upload document and selfie.");
+    if (docFile.size > MAX_MB*1024*1024 || selfieFile.size > MAX_MB*1024*1024) return onError?.("Each file must be ≤ 8 MB.");
+
+    try {
+      setSubmitting(true);
+      const fd = new FormData();
+      fd.append("aadhaar_number", aadhaar);
+      fd.append("document", docFile);
+      fd.append("selfie", selfieFile);
+      await api.post("/kyc/submit", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setAadhaar(""); setDocFile(null); setSelfieFile(null);
+      onSubmitted?.("KYC submitted. We’ll notify you after review.");
+      await onRefresh?.();
+    } catch (err) {
+      onError?.(err?.response?.data?.message || "KYC submission failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section>
+        <h3 className="text-lg font-bold mb-3">KYC Verification</h3>
+        <div className="bg-[#121829] border border-[#2A3245] rounded-md p-4">
+          <div className="text-sm text-gray-300">Status</div>
+          <div className="mt-1">
+            {!state.status ? (
+              <span className="text-gray-400">No submission yet</span>
+            ) : (
+              <span className={{
+                pending: "text-amber-300",
+                approved: "text-emerald-300",
+                rejected: "text-red-300",
+              }[state.status] || "text-gray-300"}>
+                {state.status.toUpperCase()}
+              </span>
+            )}
+          </div>
+          {!!state.aadhaar_last4 && <div className="mt-1 text-xs text-gray-400">Aadhaar: •••• •••• •••• {state.aadhaar_last4}</div>}
+          {!!state.review_notes && <div className="mt-1 text-xs text-gray-400">Notes: {state.review_notes}</div>}
+        </div>
+      </section>
+
+      <form onSubmit={submitKyc} className="space-y-4">
+        <Field>
+          <Label htmlFor="aadhaar">Aadhaar Number</Label>
+          <Input
+            id="aadhaar"
+            inputMode="numeric"
+            pattern="\d{12}"
+            maxLength={12}
+            placeholder="12-digit Aadhaar"
+            value={aadhaar}
+            onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
+            required
+          />
+          <span className={`text-xs ${isValidAadhaar(aadhaar) || !aadhaar ? "text-gray-400" : "text-red-300"}`}>
+            Must be exactly 12 digits.
+          </span>
+        </Field>
+
+        <div>
+          <Label>Upload Document Photo</Label>
+          <input type="file" accept="image/*"
+            onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+            className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
+            required
+          />
+        </div>
+
+        <div>
+          <Label>Live Selfie</Label>
+          <input type="file" accept="image/*" capture="user"
+            onChange={(e) => setSelfieFile(e.target.files?.[0] || null)}
+            className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
+            required
+          />
+          <div className="mt-2 text-xs text-gray-400">Tip: good lighting, face centered, no sunglasses.</div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={submitting}>{submitting ? "Submitting..." : "Submit KYC"}</Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ---------- keep your existing UI atoms + ReferralTab + other forms ---------- */
+// PersonalForm, AccountForm, PasswordForm, ReferralTab, Field, Label, Input, Select, Button, Req, formatDate, formatMoney...
 
 /* ---------- Referral Tab ---------- */
 function ReferralTab({ refState, setRefState, onCopied }) {
