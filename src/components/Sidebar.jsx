@@ -7,7 +7,7 @@ const getCategory = (symbolObj) => {
   const symbol = symbolObj.symbol || symbolObj.SYMBOL;
   if (/BTC|ETH|USDT|XRP|ADA|DOGE|SOL|LTC|BCH|XMR/i.test(symbol))
     return "Cryptocurrencies";
-  if (/XAU|XAG|OIL|GOLD|WTI|BRENT/i.test(symbol)) return "Commodities";
+  if (/XAU|XAG|NATGAS|XCU|BCO|BRENT/i.test(symbol)) return "Commodities";
   return "Currencies";
 };
 
