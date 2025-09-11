@@ -8,6 +8,7 @@ const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID;
 import UpIcon from "../assets/icons/up.svg"; // ⬆ आपका SVG
 import DownIcon from "../assets/icons/down.svg"; // ⬇ आपका SVG
 
+
 // Helpers
 
 // 1 pip = 0.0001 for EURUSD
@@ -50,15 +51,19 @@ export default function TradePanel({
   const [requiredMargin, setRequiredMargin] = useState("--");
   // const [tradeSize, setTradeSize] = useState(0.01);
 
-  const increase = () => setTradeSize((prev) => +(prev + 0.01).toFixed(2));
-  const decrease = () =>
-    setTradeSize((prev) => Math.max(0.01, +(prev - 0.01).toFixed(2)));
+  const increase = () =>
+  setTradeSize((prev) => Math.min(100, +(prev + 0.01).toFixed(2)));
+
+const decrease = () =>
+  setTradeSize((prev) => Math.max(0.01, +(prev - 0.01).toFixed(2)));
+
   const flatFlags = Array.isArray(flagsData[0]) ? flagsData[0] : flagsData;
   const baseCode = symbol.slice(0, 3);
   const quoteCode = symbol.slice(3, 6);
 
   const baseFlagObj = flatFlags.find((f) => f.code === baseCode);
   const quoteFlagObj = flatFlags.find((f) => f.code === quoteCode);
+  const [isEmptyTradeSize, setIsEmptyTradeSize] = useState(false); // extra flag
 
   // Subscribe to live ticks
   useEffect(() => {
@@ -172,7 +177,33 @@ export default function TradePanel({
         : (parseFloat(atPrice) - newPrice) * PIP_FACTOR;
     setTpPips(Math.max(0, Math.round(diff)));
   };
+  const handleTradeSizeChange = (e) => {
+    const val = e.target.value;
+    if (val === "") {
+      setIsEmptyTradeSize(true); // empty allowed
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      setIsEmptyTradeSize(false);
+      setTradeSize(num);
+    }
+  };
 
+  const handleTradeSizeBlur = () => {
+    if (isEmptyTradeSize) {
+    setTradeSize(0.01); // default back
+    setIsEmptyTradeSize(false);
+    return;
+  }
+  if (tradeSize < 0.01) {
+    setTradeSize(0.01);
+  } else if (tradeSize > 100) {
+    setTradeSize(100);
+  } else {
+    setTradeSize(+tradeSize.toFixed(2));
+  }
+  };
   const derivedOrderType = useMemo(() => {
     if (!pending) return "market"; // ✅ Only use 'limit' or 'stop' if pending toggle is on
     return orderType.split(" ")[1].toLowerCase();
@@ -227,6 +258,71 @@ export default function TradePanel({
     (!useSL || slPips > 0) &&
     (!useTP || tpPips > 0);
 
+  // const handleTrade = async () => {
+  //   setIsSubmitting(true);
+  //   try {
+  //     const res = await fetch(`${import.meta.env.VITE_API_URL}/place`, {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${user.token}`,
+  //       },
+  //       body: JSON.stringify(payload),
+  //     });
+  //     const { status, data: order, message } = await res.json();
+  //     if (status === "success") {
+  //       setToastTitle("Trade Placed Successfully");
+  //       setToastData("Your order has been sent.");
+  //       setToastType("success");
+  //       setToastOpen(true);
+  //       playChime();
+  //       onTradeSuccess?.(order);
+  //     } else {
+  //       alert("Trade failed: " + message);
+  //     }
+  //   } catch (err) {
+  //     console.error("Network error:", err);
+  //     setToastTitle("Network Error");
+  //     setToastData("There was a problem placing your trade.");
+  //     setToastType("error");
+  //     setToastOpen(true);
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
+
+  // put this helper above the component or inside it (before handleTrade)
+  function normalizeApi(json, httpOk = true) {
+    // Unified shape: { ok:boolean, code:string, message:string, data:any, details?:object }
+    if (typeof json?.ok === "boolean") {
+      return {
+        ok: json.ok,
+        code: json.code || (json.ok ? "OK" : "ERROR"),
+        message: json.message || "",
+        data: json.data ?? null,
+        details: json.details,
+      };
+    }
+    if (typeof json?.status === "string") {
+      const ok = json.status === "success";
+      return {
+        ok,
+        code: json.code || (ok ? "OK" : "ERROR"),
+        message: json.message || "",
+        data: json.data ?? null,
+        details: json.details,
+      };
+    }
+    // Fallback: if HTTP was OK but body has no flags, treat as success; else error
+    return {
+      ok: httpOk,
+      code: httpOk ? "OK" : "HTTP_ERROR",
+      message: json?.message || "",
+      data: json ?? null,
+      details: json?.details,
+    };
+  }
+
   const handleTrade = async () => {
     setIsSubmitting(true);
     try {
@@ -238,21 +334,106 @@ export default function TradePanel({
         },
         body: JSON.stringify(payload),
       });
-      const { status, data: order, message } = await res.json();
-      if (status === "success") {
-        setToastTitle("Trade Placed Successfully");
-        setToastData("Your order has been sent.");
-        setToastType("success");
-        setToastOpen(true);
-        playChime();
-        onTradeSuccess?.(order);
-      } else {
-        alert("Trade failed: " + message);
+
+      // Try to parse JSON; if it fails, we’ll synthesize an error
+      let body;
+      try {
+        body = await res.json();
+      } catch {
+        body = { message: "Invalid JSON from server" };
       }
+
+      const norm = normalizeApi(body, res.ok);
+
+      if (!res.ok || !norm.ok) {
+        // Map common backend codes to nicer UI
+        let title = "Trade Rejected";
+        let type = "error";
+        let desc = norm.message || "Request failed.";
+
+        if (norm.code === "INSUFFICIENT_MARGIN") {
+          title = "Insufficient Margin make Deposit First";
+          type = "warning";
+          // const d = norm.details || {};
+          // // Show numbers if the backend sent them
+          // if (
+          //   typeof d.required_margin !== "undefined" &&
+          //   typeof d.free_margin !== "undefined"
+          // ) {
+          //   desc =
+          //     `Required: $${Number(
+          //       d.required_margin
+          //     ).toLocaleString()} • Free: $${Number(
+          //       d.free_margin
+          //     ).toLocaleString()}` +
+          //     (d.leverage ? ` • Leverage: 1:${d.leverage}` : "");
+          // }
+        } else if (norm.code === "VOLUME_STEP_INVALID") {
+          title = "Invalid Volume Step";
+          type = "warning";
+          const d = norm.details || {};
+          if (
+            typeof d.step !== "undefined" &&
+            typeof d.requested !== "undefined"
+          ) {
+            desc = `Volume must be in steps of ${d.step}. You entered ${d.requested}.`;
+          }
+        } else if (norm.code === "VOLUME_OUT_OF_RANGE") {
+          title = "Volume Out of Range";
+          type = "warning";
+          const d = norm.details || {};
+          if (
+            typeof d.min !== "undefined" &&
+            typeof d.max !== "undefined" &&
+            typeof d.requested !== "undefined"
+          ) {
+            desc = `Allowed: ${d.min}–${d.max}. You entered ${d.requested}.`;
+          }
+        } else if (body?.errors) {
+          // Laravel validation errors: { message, errors: { field: [error...] } }
+          title = "Validation Error";
+          type = "error";
+          const list = Object.values(body.errors).flat();
+          desc = list.join(" • ");
+        }
+
+        setToastTitle(title);
+        setToastData(desc);
+        setToastType(type);
+        setToastOpen(true);
+        return;
+      }
+
+      // Success path
+      // norm.code could be ORDER_QUEUED (202) or ORDER_PLACED (201) depending on your backend flow
+      const order =
+        norm.data?.order ??
+        norm.data ??
+        body?.data?.order ??
+        body?.data ??
+        null;
+
+      const successTitle =
+        norm.code === "ORDER_QUEUED"
+          ? "Order Queued"
+          : "Trade Placed Successfully";
+      const successMsg =
+        norm.message ||
+        (norm.code === "ORDER_QUEUED"
+          ? "Your order has been accepted and queued for execution."
+          : "Your order has been executed.");
+
+      setToastTitle(successTitle);
+      setToastData(successMsg);
+      setToastType("success");
+      setToastOpen(true);
+      playChime();
+
+      onTradeSuccess?.(order);
     } catch (err) {
       console.error("Network error:", err);
       setToastTitle("Network Error");
-      setToastData("There was a problem placing your trade.");
+      setToastData("We couldn't reach the server. Please try again.");
       setToastType("error");
       setToastOpen(true);
     } finally {
@@ -316,13 +497,14 @@ export default function TradePanel({
               type="number"
               step="0.01"
               min="0.01"
-              value={tradeSize}
-              onChange={(e) => setTradeSize(Math.max(0.01, +e.target.value))}
+               max="100"
+              value={isEmptyTradeSize ? "" : tradeSize}
+              onChange={handleTradeSizeChange}
+              onBlur={handleTradeSizeBlur}
               className="flex-1 bg-transparent text-white text-sm outline-none px-1"
             />
 
-            {/* Buttons (stacked vertically) */}
-            {/* <div className="flex flex-col ml-2 border-l border-gray-700"> */}
+            {/* Buttons */}
             <button
               type="button"
               onClick={increase}
@@ -339,15 +521,14 @@ export default function TradePanel({
               onClick={decrease}
               className="w-6 h-5 flex items-center justify-center text-gray-300 ms-1 hover:text-white"
             >
-              {/* Same icon rotated 180° */}
               <img
                 src={UpIcon}
                 alt="Decrease"
-                className="w-6 h-6 transform rotate-180  bg-gray-500 rounded-sm"
+                className="w-6 h-6 transform rotate-180 bg-gray-500 rounded-sm"
               />
             </button>
-            {/* </div> */}
           </div>
+
           <div className="text-xs text-gray-400 space-y-1 mb-4">
             <div className="flex justify-between">
               <span>{tradeSize.toFixed(2)} Lot:</span>

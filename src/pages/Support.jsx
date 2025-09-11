@@ -119,18 +119,30 @@ export default function Support() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field>
                     <Label>Name</Label>
-                    <Input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="Your full name" />
+                    <Input
+                      value={form.name}
+                      onChange={(e) => update("name", e.target.value)}
+                      placeholder="Your full name"
+                    />
                   </Field>
                   <Field>
                     <Label>Email</Label>
-                    <Input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} placeholder="you@example.com" />
+                    <Input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => update("email", e.target.value)}
+                      placeholder="you@example.com"
+                    />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <Field>
                     <Label>Country code</Label>
-                    <Select value={form.dialCode} onChange={(e) => update("dialCode", e.target.value)}>
+                    <Select
+                      value={form.dialCode}
+                      onChange={(e) => update("dialCode", e.target.value)}
+                    >
                       {DIAL_CODES.map((d) => (
                         <option key={d.cc + d.code} value={d.code}>
                           {d.code}
@@ -141,19 +153,32 @@ export default function Support() {
                   <div className="col-span-2">
                     <Field>
                       <Label>Contact number</Label>
-                      <Input value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder="Contact number" />
+                      <Input
+                        value={form.phone}
+                        onChange={(e) => update("phone", e.target.value)}
+                        placeholder="Contact number"
+                      />
                     </Field>
                   </div>
                 </div>
 
                 <Field>
                   <Label>Subject (optional)</Label>
-                  <Input value={form.subject} onChange={(e) => update("subject", e.target.value)} placeholder="e.g. Verification help" />
+                  <Input
+                    value={form.subject}
+                    onChange={(e) => update("subject", e.target.value)}
+                    placeholder="e.g. Verification help"
+                  />
                 </Field>
 
                 <Field>
                   <Label>Message</Label>
-                  <TextArea rows={5} value={form.message} onChange={(e) => update("message", e.target.value)} placeholder="Tell us how we can help…" />
+                  <TextArea
+                    rows={5}
+                    value={form.message}
+                    onChange={(e) => update("message", e.target.value)}
+                    placeholder="Tell us how we can help…"
+                  />
                 </Field>
 
                 {msg.err && (
@@ -171,24 +196,6 @@ export default function Support() {
                   <Button type="submit" disabled={submitting}>
                     {submitting ? "Submitting…" : "Submit Request"}
                   </Button>
-
-                  {/* WhatsApp primary CTA */}
-                  <button
-                    type="button"
-                    onClick={openWhatsApp}
-                    className="inline-flex items-center justify-center gap-2 bg-[#2BD4A3] text-[#0B1B7F] font-semibold px-5 py-2.5 rounded-md hover:brightness-95"
-                  >
-                    <WhatsAppIcon /> Chat on WhatsApp
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={copyNumber}
-                    className="inline-flex items-center justify-center gap-2 border border-[#2A3245] px-5 py-2.5 rounded-md hover:bg-[#121829]"
-                    title="Copy WhatsApp number"
-                  >
-                    {copied ? "✓ Copied" : "Copy WA number"}
-                  </button>
                 </div>
               </form>
             </section>
@@ -198,7 +205,8 @@ export default function Support() {
               <div className="bg-[#121829] border border-[#2A3245] rounded-xl p-4">
                 <h3 className="font-semibold mb-2">Contact options</h3>
                 <p className="text-sm text-gray-300">
-                  You can create a ticket or contact us on WhatsApp. We usually reply within a few minutes during business hours.
+                  You can create a ticket or contact us on WhatsApp. We usually
+                  reply within a few minutes during business hours.
                 </p>
 
                 <div className="mt-4 text-sm">
@@ -208,14 +216,19 @@ export default function Support() {
 
                 <div className="mt-4 text-sm">
                   <div className="text-gray-400">Support hours</div>
-                  <div className="font-medium mt-1">Mon–Sat, 9:00–18:00 (IST)</div>
+                  <div className="font-medium mt-1">
+                    Mon–Sat, 9:00–18:00 (IST)
+                  </div>
                 </div>
 
                 <div className="mt-4 text-sm">
                   <div className="text-gray-400">Email</div>
                   <div className="font-medium mt-1">
-                    <a href={`mailto:support@yourdomain.com`} className="underline hover:no-underline">
-                      support@yourdomain.com
+                    <a
+                      href={`mailto:support@royalfxs.com`}
+                      className="underline hover:no-underline"
+                    >
+                      support@royalfxs.com
                     </a>
                   </div>
                 </div>

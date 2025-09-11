@@ -263,7 +263,7 @@ export default function UserProfile() {
           <div className="bg-[#0B1B7F] px-5 py-4 flex items-center justify-between">
             <h2 className="text-xl sm:text-2xl font-extrabold">My Profile</h2>
           </div>
-
+          TabButton
           {/* Tabs */}
           <div className="px-3 sm:px-5 pt-3">
             <div className="flex flex-wrap gap-2">
@@ -277,7 +277,11 @@ export default function UserProfile() {
                 active={tab === "account"}
                 onClick={() => setTab("account")}
               />
-                 <TabButton label="KYC" active={tab === "kyc"} onClick={() => setTab("kyc")} />
+              <TabButton
+                label="KYC"
+                active={tab === "kyc"}
+                onClick={() => setTab("kyc")}
+              />
               <TabButton
                 label="Change Password"
                 active={tab === "password"}
@@ -290,7 +294,6 @@ export default function UserProfile() {
               />
             </div>
           </div>
-
           {/* Body */}
           <div className="px-4 sm:px-6 lg:px-10 py-6">
             {loading ? (
@@ -581,9 +584,15 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
 
   async function submitKyc(e) {
     e?.preventDefault?.();
-    if (!isValidAadhaar(aadhaar)) return onError?.("Aadhaar must be exactly 12 digits.");
-    if (!docFile || !selfieFile) return onError?.("Please upload document and selfie.");
-    if (docFile.size > MAX_MB*1024*1024 || selfieFile.size > MAX_MB*1024*1024) return onError?.("Each file must be ≤ 8 MB.");
+    if (!isValidAadhaar(aadhaar))
+      return onError?.("Aadhaar must be exactly 12 digits.");
+    if (!docFile || !selfieFile)
+      return onError?.("Please upload document and selfie.");
+    if (
+      docFile.size > MAX_MB * 1024 * 1024 ||
+      selfieFile.size > MAX_MB * 1024 * 1024
+    )
+      return onError?.("Each file must be ≤ 8 MB.");
 
     try {
       setSubmitting(true);
@@ -591,8 +600,12 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
       fd.append("aadhaar_number", aadhaar);
       fd.append("document", docFile);
       fd.append("selfie", selfieFile);
-      await api.post("/kyc/submit", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setAadhaar(""); setDocFile(null); setSelfieFile(null);
+      await api.post("/kyc/submit", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setAadhaar("");
+      setDocFile(null);
+      setSelfieFile(null);
       onSubmitted?.("KYC submitted. We’ll notify you after review.");
       await onRefresh?.();
     } catch (err) {
@@ -612,17 +625,29 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
             {!state.status ? (
               <span className="text-gray-400">No submission yet</span>
             ) : (
-              <span className={{
-                pending: "text-amber-300",
-                approved: "text-emerald-300",
-                rejected: "text-red-300",
-              }[state.status] || "text-gray-300"}>
+              <span
+                className={
+                  {
+                    pending: "text-amber-300",
+                    approved: "text-emerald-300",
+                    rejected: "text-red-300",
+                  }[state.status] || "text-gray-300"
+                }
+              >
                 {state.status.toUpperCase()}
               </span>
             )}
           </div>
-          {!!state.aadhaar_last4 && <div className="mt-1 text-xs text-gray-400">Aadhaar: •••• •••• •••• {state.aadhaar_last4}</div>}
-          {!!state.review_notes && <div className="mt-1 text-xs text-gray-400">Notes: {state.review_notes}</div>}
+          {!!state.aadhaar_last4 && (
+            <div className="mt-1 text-xs text-gray-400">
+              Aadhaar: •••• •••• •••• {state.aadhaar_last4}
+            </div>
+          )}
+          {!!state.review_notes && (
+            <div className="mt-1 text-xs text-gray-400">
+              Notes: {state.review_notes}
+            </div>
+          )}
         </div>
       </section>
 
@@ -636,17 +661,27 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
             maxLength={12}
             placeholder="12-digit Aadhaar"
             value={aadhaar}
-            onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))}
+            onChange={(e) =>
+              setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))
+            }
             required
           />
-          <span className={`text-xs ${isValidAadhaar(aadhaar) || !aadhaar ? "text-gray-400" : "text-red-300"}`}>
+          <span
+            className={`text-xs ${
+              isValidAadhaar(aadhaar) || !aadhaar
+                ? "text-gray-400"
+                : "text-red-300"
+            }`}
+          >
             Must be exactly 12 digits.
           </span>
         </Field>
 
         <div>
           <Label>Upload Document Photo</Label>
-          <input type="file" accept="image/*"
+          <input
+            type="file"
+            accept="image/*"
             onChange={(e) => setDocFile(e.target.files?.[0] || null)}
             className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
             required
@@ -655,16 +690,23 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
 
         <div>
           <Label>Live Selfie</Label>
-          <input type="file" accept="image/*" capture="user"
+          <input
+            type="file"
+            accept="image/*"
+            capture="user"
             onChange={(e) => setSelfieFile(e.target.files?.[0] || null)}
             className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
             required
           />
-          <div className="mt-2 text-xs text-gray-400">Tip: good lighting, face centered, no sunglasses.</div>
+          <div className="mt-2 text-xs text-gray-400">
+            Tip: good lighting, face centered, no sunglasses.
+          </div>
         </div>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={submitting}>{submitting ? "Submitting..." : "Submit KYC"}</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Submitting..." : "Submit KYC"}
+          </Button>
         </div>
       </form>
     </div>
@@ -684,8 +726,8 @@ function ReferralTab({ refState, setRefState, onCopied }) {
     const base =
       import.meta?.env?.VITE_PUBLIC_SIGNUP_URL ||
       (typeof window !== "undefined"
-        ? `${window.location.origin}/register`
-        : "/register");
+        ? `${window.location.origin}/login`
+        : "/login");
     return `${base}?ref=${encodeURIComponent(code)}`;
   }, [code]);
 

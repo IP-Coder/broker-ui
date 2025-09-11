@@ -161,12 +161,6 @@ export default function Header() {
                  </div>
                  <div className="border-t my-1"></div>
                  <Link
-                   to="/info"
-                   className="block px-3 py-2 text-[#0B1B7F] hover:bg-gray-50"
-                 >
-                   Info
-                 </Link>
-                 <Link
                    to="/support"
                    className="block px-3 py-2 text-[#0B1B7F] hover:bg-gray-50"
                  >
@@ -215,25 +209,7 @@ export default function Header() {
                  </svg>
                ),
              })}
-             {/* Info */}
-             <Link
-               to="/info"
-               title="Info"
-               className="p-2 rounded hover:bg-gray-100 text-[#0B1B7F]"
-             >
-               <svg viewBox="0 0 24 24" className="w-5 h-5">
-                 <circle
-                   cx="12"
-                   cy="12"
-                   r="10"
-                   stroke="currentColor"
-                   strokeWidth="2"
-                   fill="none"
-                 />
-                 <circle cx="12" cy="8" r="1.5" fill="currentColor" />
-                 <path d="M11 11h2v7h-2z" fill="currentColor" />
-               </svg>
-             </Link>
+
              {/* Support */}
              <Link
                to="/support"
