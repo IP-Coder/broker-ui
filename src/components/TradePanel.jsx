@@ -16,11 +16,7 @@ const PIP_VALUE_PER_LOT = 0.1;
 const PIP_FACTOR = 10000;
 const ONE_PIP = 1 / PIP_FACTOR;
 
-export default function TradePanel({
-  symbol = "EURUSD",
-  user,
-  onTradeSuccess,
-}) {
+export default function TradePanel({ symbol = "EURUSD", user, onTradeSuccess, onClose }) {
   const [tab, setTab] = useState("Market execution");
   const [tradeSize, setTradeSize] = useState(0.01);
   const [side, setSide] = useState("");
@@ -52,10 +48,10 @@ export default function TradePanel({
   // const [tradeSize, setTradeSize] = useState(0.01);
 
   const increase = () =>
-  setTradeSize((prev) => Math.min(100, +(prev + 0.01).toFixed(2)));
+    setTradeSize((prev) => Math.min(100, +(prev + 0.01).toFixed(2)));
 
-const decrease = () =>
-  setTradeSize((prev) => Math.max(0.01, +(prev - 0.01).toFixed(2)));
+  const decrease = () =>
+    setTradeSize((prev) => Math.max(0.01, +(prev - 0.01).toFixed(2)));
 
   const flatFlags = Array.isArray(flagsData[0]) ? flagsData[0] : flagsData;
   const baseCode = symbol.slice(0, 3);
@@ -192,17 +188,17 @@ const decrease = () =>
 
   const handleTradeSizeBlur = () => {
     if (isEmptyTradeSize) {
-    setTradeSize(0.01); // default back
-    setIsEmptyTradeSize(false);
-    return;
-  }
-  if (tradeSize < 0.01) {
-    setTradeSize(0.01);
-  } else if (tradeSize > 100) {
-    setTradeSize(100);
-  } else {
-    setTradeSize(+tradeSize.toFixed(2));
-  }
+      setTradeSize(0.01); // default back
+      setIsEmptyTradeSize(false);
+      return;
+    }
+    if (tradeSize < 0.01) {
+      setTradeSize(0.01);
+    } else if (tradeSize > 100) {
+      setTradeSize(100);
+    } else {
+      setTradeSize(+tradeSize.toFixed(2));
+    }
   };
   const derivedOrderType = useMemo(() => {
     if (!pending) return "market"; // ✅ Only use 'limit' or 'stop' if pending toggle is on
@@ -458,7 +454,14 @@ const decrease = () =>
             {label}
           </button>
         ))}
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-white px-2"
+        >
+          ❌
+        </button>
       </div>
+      {/* ❌ Cross button right side */}
 
       {/* Symbol header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[#323848]">
@@ -497,7 +500,7 @@ const decrease = () =>
               type="number"
               step="0.01"
               min="0.01"
-               max="100"
+              max="100"
               value={isEmptyTradeSize ? "" : tradeSize}
               onChange={handleTradeSizeChange}
               onBlur={handleTradeSizeBlur}

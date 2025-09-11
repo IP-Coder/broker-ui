@@ -1,4 +1,4 @@
-// src/components/Dashboard.jsx - Updated with Mobile Support
+// Dashboard.jsx
 import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import TradePanel from "../components/TradePanel";
@@ -14,6 +14,7 @@ export default function Dashboard({ isDemo, setIsDemo }) {
   const [ohlcData, setOhlcData] = useState([]);
   const [user, setUser] = useState(null);
   const [reloadOpen, setReloadOpen] = useState(0);
+  const [showTradePanel, setShowTradePanel] = useState(true); // ✅ Toggle state
   const isMobile = useMobile();
 
   useEffect(() => {
@@ -29,12 +30,6 @@ export default function Dashboard({ isDemo, setIsDemo }) {
       .then((res) => setOhlcData(res.data || []));
   }, [selectedSymbol]);
 
-  // Handle trade success callback
-  const handleTradeSuccess = (order) => {
-    setReloadOpen((prev) => prev + 1);
-  };
-
-  // If mobile, render the dedicated mobile dashboard
   if (isMobile) {
     return <MobileDashboard />;
   }
@@ -42,7 +37,9 @@ export default function Dashboard({ isDemo, setIsDemo }) {
   return (
     <div className="bg-[#181C23] min-h-screen h-screen flex flex-col">
       <Header isDemo={isDemo} setIsDemo={setIsDemo} />
+
       <div className="flex flex-1 overflow-hidden h-full">
+        {/* Sidebar */}
         <div className="basis-[25%] flex-shrink-0 max-w-[30vw] h-full overflow-y-auto">
           <Sidebar
             selectedSymbol={selectedSymbol}
@@ -50,19 +47,38 @@ export default function Dashboard({ isDemo, setIsDemo }) {
             user={user}
           />
         </div>
-        <div className="basis-[20%]">
-          <TradePanel
-            symbol={selectedSymbol}
-            user={user}
-            onTradeSuccess={() => setReloadOpen((r) => r + 1)}
-          />
-        </div>
-        <div className="flex-1 flex flex-col bg-[#222833] h-full overflow-hidden">
+
+        {/* TradePanel (conditionally render) */}
+        {showTradePanel && (
+          <div className="basis-[20%] flex-shrink-0 h-full">
+            <TradePanel
+              symbol={selectedSymbol}
+              user={user}
+              onTradeSuccess={() => setReloadOpen((r) => r + 1)}
+              onClose={() => setShowTradePanel(false)} // ✅ नया prop
+            />
+          </div>
+        )}
+
+        {/* ChartPanel expand when trade panel is hidden */}
+        <div className="flex-1 flex flex-col bg-[#222833] h-full overflow-hidden relative">
+          {/* Chart */}
           <div className="p-4 flex-1">
             <ChartPanel symbol={selectedSymbol} ohlcData={ohlcData} />
           </div>
+
+          {/* Show “Open Trade” button when TradePanel is hidden */}
+          {!showTradePanel && (
+            <button
+              onClick={() => setShowTradePanel(true)}
+              className="absolute top-4 right-4 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition z-10"
+            >
+              Open Trade
+            </button>
+          )}
         </div>
       </div>
+
       <Footer reloadTrigger={reloadOpen} />
     </div>
   );
