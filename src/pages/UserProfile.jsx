@@ -574,38 +574,44 @@ export default function UserProfile() {
 
 /* ---------- NEW: KYC Tab ---------- */
 function KycTab({ state, onSubmitted, onError, onRefresh }) {
-  const [aadhaar, setAadhaar] = useState("");
+  const [nationalId, setNationalId] = useState("");
   const [docFile, setDocFile] = useState(null);
-  const [selfieFile, setSelfieFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isValidAadhaar = (v) => /^\d{12}$/.test(v);
   const MAX_MB = 8;
+  const isValidNationalId = (v) => /^[A-Za-z0-9]{6,20}$/.test(v);
 
   async function submitKyc(e) {
     e?.preventDefault?.();
-    if (!isValidAadhaar(aadhaar))
-      return onError?.("Aadhaar must be exactly 12 digits.");
-    if (!docFile || !selfieFile)
-      return onError?.("Please upload document and selfie.");
-    if (
-      docFile.size > MAX_MB * 1024 * 1024 ||
-      selfieFile.size > MAX_MB * 1024 * 1024
-    )
-      return onError?.("Each file must be ≤ 8 MB.");
+
+    // Validation
+    if (!isValidNationalId(nationalId)) {
+      return onError?.(
+        "National ID must be 6–20 characters (letters or digits)."
+      );
+    }
+    if (!docFile) {
+      return onError?.("Please upload your National ID document.");
+    }
+    if (docFile.size > MAX_MB * 1024 * 1024) {
+      return onError?.("Document file must be ≤ 8 MB.");
+    }
 
     try {
       setSubmitting(true);
       const fd = new FormData();
-      fd.append("aadhaar_number", aadhaar);
+
+      // 👇 Backend field name same rakhna hai
+      fd.append("aadhaar_number", nationalId);
       fd.append("document", docFile);
-      fd.append("selfie", selfieFile);
+
       await api.post("/kyc/submit", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setAadhaar("");
+
+      setNationalId("");
       setDocFile(null);
-      setSelfieFile(null);
+
       onSubmitted?.("KYC submitted. We’ll notify you after review.");
       await onRefresh?.();
     } catch (err) {
@@ -617,6 +623,7 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Status Section */}
       <section>
         <h3 className="text-lg font-bold mb-3">KYC Verification</h3>
         <div className="bg-[#121829] border border-[#2A3245] rounded-md p-4">
@@ -638,9 +645,9 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
               </span>
             )}
           </div>
-          {!!state.aadhaar_last4 && (
+          {!!state.id_number_last4 && (
             <div className="mt-1 text-xs text-gray-400">
-              Aadhaar: •••• •••• •••• {state.aadhaar_last4}
+              National ID: •••• •••• •••• {state.id_number_last4}
             </div>
           )}
           {!!state.review_notes && (
@@ -651,34 +658,34 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
         </div>
       </section>
 
+      {/* Form Section */}
       <form onSubmit={submitKyc} className="space-y-4">
         <Field>
-          <Label htmlFor="aadhaar">Aadhaar Number</Label>
+          <Label htmlFor="nationalId">National ID</Label>
           <Input
-            id="aadhaar"
-            inputMode="numeric"
-            pattern="\d{12}"
-            maxLength={12}
-            placeholder="12-digit Aadhaar"
-            value={aadhaar}
+            id="nationalId"
+            inputMode="text"
+            pattern="[A-Za-z0-9]{6,20}"
+            placeholder="Enter National ID"
+            value={nationalId}
             onChange={(e) =>
-              setAadhaar(e.target.value.replace(/\D/g, "").slice(0, 12))
+              setNationalId(e.target.value.replace(/[^A-Za-z0-9]/g, ""))
             }
             required
           />
           <span
             className={`text-xs ${
-              isValidAadhaar(aadhaar) || !aadhaar
+              isValidNationalId(nationalId) || !nationalId
                 ? "text-gray-400"
                 : "text-red-300"
             }`}
           >
-            Must be exactly 12 digits.
+            Must be 6–20 letters or digits.
           </span>
         </Field>
 
         <div>
-          <Label>Upload Document Photo</Label>
+          <Label>Upload National ID Document</Label>
           <input
             type="file"
             accept="image/*"
@@ -686,21 +693,6 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
             className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
             required
           />
-        </div>
-
-        <div>
-          <Label>Live Selfie</Label>
-          <input
-            type="file"
-            accept="image/*"
-            capture="user"
-            onChange={(e) => setSelfieFile(e.target.files?.[0] || null)}
-            className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
-            required
-          />
-          <div className="mt-2 text-xs text-gray-400">
-            Tip: good lighting, face centered, no sunglasses.
-          </div>
         </div>
 
         <div className="flex justify-end">
@@ -712,6 +704,7 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
     </div>
   );
 }
+
 
 /* ---------- keep your existing UI atoms + ReferralTab + other forms ---------- */
 // PersonalForm, AccountForm, PasswordForm, ReferralTab, Field, Label, Input, Select, Button, Req, formatDate, formatMoney...

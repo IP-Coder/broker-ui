@@ -14,9 +14,13 @@ import ErrorBoundary from "./secure/ErrorBoundary"; // ✅ import
 import Deposit from "./pages/Deposit";
 import Withdrawal from "./pages/Withdrawal";
 import Support from "./pages/Support";
+import MobileCoinslist from "./components/MobileCoinslist";
+import MobileWallet from "./components/MobileWallet";
+import { useMobile } from "./hooks/useMobile";
 
 export default function App() {
   const isAuthenticated = !!localStorage.getItem("token");
+  const isMobile = useMobile();
 
   return (
     <Router>
@@ -27,7 +31,7 @@ export default function App() {
             path="/"
             element={
               isAuthenticated ? (
-                <Navigate to="/dashboard" replace />
+                <Navigate to={isMobile ? "/markets" : "/dashboard"} replace />
               ) : (
                 <Navigate to="/login" replace />
               )
@@ -35,6 +39,22 @@ export default function App() {
           />
 
           {/* Protected routes */}
+          <Route
+            path="/markets"
+            element={
+              <ProtectedRoute>
+                <MobileCoinslist />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/wallet"
+            element={
+              <ProtectedRoute>
+                <MobileWallet />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard"
             element={
