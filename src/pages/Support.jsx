@@ -101,7 +101,7 @@ export default function Support() {
   }
 
   return (
-    <div className="bg-[#0F1420] min-h-screen text-white">
+    <div className=" min-h-screen text-white">
       <Header />
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 pt-6 pb-14">

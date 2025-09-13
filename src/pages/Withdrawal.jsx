@@ -61,7 +61,7 @@ export default function Banking() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0F1420] text-white">
+    <div className="min-h-screen  text-white">
       <Header />
 
       <main className="mx-auto max-w-6xl px-4 sm:px-6 pt-6 pb-14">

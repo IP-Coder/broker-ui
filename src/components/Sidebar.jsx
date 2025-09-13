@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { socket } from "../socketClient"; // ✅ Updated to use Socket.IO
+import { socket } from "../socketClient"; // ✅ Socket.IO
 import { flagsData } from "./flagsdata"; // ✅ country code to flag mapping
+
 // Helper for asset categories
 const getCategory = (symbolObj) => {
   if (!symbolObj) return "Currencies";
@@ -9,6 +10,22 @@ const getCategory = (symbolObj) => {
     return "Cryptocurrencies";
   if (/XAU|XAG|NATGAS|XCU|BCO|BRENT/i.test(symbol)) return "Commodities";
   return "Currencies";
+};
+
+// 🕒 U.S. (New York) weekend helper
+const isUSWeekend = () => {
+  try {
+    const nyString = new Date().toLocaleString("en-US", {
+      timeZone: "America/New_York",
+    });
+    const nyDate = new Date(nyString);
+    const day = nyDate.getDay(); // 0 = Sun, 6 = Sat
+    return day === 0 || day === 6;
+  } catch {
+    // If timezone parsing fails for any reason, fall back to local weekend
+    const d = new Date().getDay();
+    return d === 0 || d === 6;
+  }
 };
 
 export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
@@ -20,6 +37,16 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
   const chipRowRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // 🚨 Weekend alert + time state
+  const [showWeekendAlert, setShowWeekendAlert] = useState(false);
+  const [isWeekend, setIsWeekend] = useState(isUSWeekend());
+
+  // keep weekend status fresh (in case user keeps app open over midnight)
+  useEffect(() => {
+    const id = setInterval(() => setIsWeekend(isUSWeekend()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // 1️⃣ Fetch symbols once
   useEffect(() => {
@@ -60,9 +87,9 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
 
   // 2️⃣ Subscribe to WebSocket
   useEffect(() => {
-    socket.on("tick", (data) => {
-      // console.log("Tick received:", data);
-      const incoming = data.code.replace(/(OANDA:|BINANCE:)/g, "");
+    const handler = (data) => {
+      const incoming = data.code?.replace(/(OANDA:|BINANCE:)/g, "");
+      if (!incoming) return;
       setSymbols((prev) =>
         prev.map((a) => {
           if (a.safeSymbol !== incoming) return a;
@@ -96,11 +123,10 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
           return updated;
         })
       );
-    });
-
-    return () => {
-      socket.off("tick");
     };
+
+    socket.on("tick", handler);
+    return () => socket.off("tick", handler);
   }, []);
 
   // 3️⃣ Load user favourites
@@ -119,9 +145,15 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
     })();
   }, [user]);
 
-  // 4️⃣ Toggle favourite
+  // 4️⃣ Toggle favourite (blocked only for Currencies & Commodities on U.S. weekends)
   const toggleFavourite = async (symbol) => {
+    const asset = symbols.find((s) => s.symbol === symbol);
+    const cat = asset ? getCategory(asset) : null;
+    const blocked =
+      isWeekend && (cat === "Currencies" || cat === "Commodities");
+    if (blocked) return;
     if (!user) return;
+
     const isFav = favourites.includes(symbol);
     const updated = isFav
       ? favourites.filter((f) => f !== symbol)
@@ -186,64 +218,108 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
       window.removeEventListener("resize", checkArrows);
     };
   }, [tab]);
+
+  // 7️⃣ Price formatting helpers
   function formatSixDigits(raw) {
     if (raw == null || raw === "") return "--";
-
     const n = Number(raw);
     if (Number.isNaN(n)) return "--";
-
     const neg = n < 0;
     let s = Math.abs(n).toString();
-
-    // Handle scientific notation safely
     if (/e/i.test(s)) {
       s = Math.abs(n).toFixed(20); // plenty of decimals to slice later
     }
-
     let [intPart, fracPart = ""] = s.split(".");
-
-    // If integer already has 6+ digits, take first 6 and drop decimals
     if (intPart.length >= 6) {
       const trimmed = intPart.slice(0, 6);
       return (neg ? "-" : "") + trimmed;
     }
-
-    // Otherwise, take just enough decimals to make total digits = 6
     const need = 6 - intPart.length;
     const frac = (fracPart || "").padEnd(need, "0").slice(0, need);
-
     return (neg ? "-" : "") + intPart + "." + frac;
   }
   function formatEightDigits(raw) {
     if (raw == null || raw === "") return "--";
-
     const n = Number(raw);
     if (Number.isNaN(n)) return "--";
-
     const neg = n < 0;
     let s = Math.abs(n).toString();
-
-    // Handle scientific notation safely
     if (/e/i.test(s)) {
       s = Math.abs(n).toFixed(20); // plenty of decimals to slice later
     }
-
     let [intPart, fracPart = ""] = s.split(".");
-
-    // If integer already has 6+ digits, take first 6 and drop decimals
+    // If integer already has 8+ digits, take first 8 and drop decimals
     if (intPart.length >= 8) {
-      const trimmed = intPart.slice(0, 6);
+      const trimmed = intPart.slice(0, 8);
       return (neg ? "-" : "") + trimmed;
     }
-
     // Otherwise, take just enough decimals to make total digits = 8
     const need = 8 - intPart.length;
     const frac = (fracPart || "").padEnd(need, "0").slice(0, need);
-
     return (neg ? "-" : "") + intPart + "." + frac;
   }
+
+  // 8️⃣ Weekend alert visibility (only for Currencies & Commodities)
+  useEffect(() => {
+    const current = symbols.find((s) => s.symbol === selectedSymbol);
+    const cat = current ? getCategory(current) : null;
+
+    const isBlockedCat = (c) => c === "Currencies" || c === "Commodities";
+
+    const shouldShow =
+      isWeekend &&
+      ((cat && isBlockedCat(cat)) ||
+        (!cat && (tab === "Currencies" || tab === "Commodities")));
+
+    if (shouldShow) {
+      const key = `dismissWeekendAlert`;
+      const dismissed = sessionStorage.getItem(key) === "1";
+      setShowWeekendAlert(!dismissed);
+    } else {
+      setShowWeekendAlert(false);
+    }
+  }, [isWeekend, selectedSymbol, tab, symbols]);
+
+  const dismissWeekendAlert = () => {
+    sessionStorage.setItem("dismissWeekendAlert", "1");
+    setShowWeekendAlert(false);
+  };
+
   return (
     <aside className="bg-[#222733] p-4 border-r border-gray-800 flex flex-col">
+      {/* 🔔 Weekend Closed Alert (U.S. time) */}
+      {showWeekendAlert && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mb-3 px-3 py-2 rounded-lg border border-yellow-400 bg-[#2a260f] text-yellow-200 text-sm flex items-start gap-2"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="currentColor"
+            className="mt-[2px] flex-shrink-0"
+            aria-hidden
+          >
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-5h2v5z" />
+          </svg>
+          <div className="flex-1">
+            <strong className="font-semibold">Market Closed</strong>: Currencies
+            and commodities are not tradable on Saturdays and Sundays (U.S.
+            time).
+          </div>
+          <button
+            onClick={dismissWeekendAlert}
+            aria-label="Dismiss alert"
+            className="ml-2 rounded p-1 hover:bg-yellow-500/10 text-yellow-300"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Search Input */}
       <div className="mb-3">
         <input
@@ -313,15 +389,27 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
         ) : (
           filtered.map((asset) => {
             const isFav = favourites.includes(asset.symbol);
+            const cat = getCategory(asset);
+            const rowDisabled =
+              isWeekend && (cat === "Currencies" || cat === "Commodities");
             return (
               <li
                 key={asset.symbol}
-                onClick={() => onSelectSymbol(asset.symbol)}
-                className={`flex items-center gap-3 py-3 px-2 rounded-sm cursor-pointer ${
-                  selectedSymbol === asset.symbol
-                    ? "bg-[#2949ff33]"
-                    : "hover:bg-[#1E2A47]"
-                }`}
+                onClick={() => {
+                  if (rowDisabled) return; // block selection on weekends for blocked cats
+                  onSelectSymbol(asset.symbol);
+                }}
+                aria-disabled={rowDisabled}
+                className={`flex items-center gap-3 py-3 px-2 rounded-sm ${
+                  rowDisabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "cursor-pointer hover:bg-[#1E2A47]"
+                } ${selectedSymbol === asset.symbol ? "bg-[#2949ff33]" : ""}`}
+                title={
+                  rowDisabled
+                    ? "Market closed (U.S. weekend) — selection disabled for this category"
+                    : undefined
+                }
               >
                 <span className="w-2/6 flex items-center gap-2 text-white text-sm font-medium truncate">
                   {/* Flags Circle */}
@@ -368,11 +456,20 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     : "--/--"}
                 </span>
                 <button
-                  className="w-1/6 flex justify-end"
+                  className={`w-1/6 flex justify-end ${
+                    rowDisabled ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (rowDisabled) return; // block fav toggle for blocked cats
                     toggleFavourite(asset.symbol);
                   }}
+                  aria-disabled={rowDisabled}
+                  title={
+                    rowDisabled
+                      ? "Market closed (U.S. weekend) — action disabled for this category"
+                      : undefined
+                  }
                 >
                   <svg
                     width="18"

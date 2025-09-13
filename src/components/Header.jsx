@@ -168,6 +168,14 @@ export default function Header() {
                  </Link>
                  <div className="border-t my-1"></div>
                  <div className="px-3 py-2 text-xs text-gray-500">Account</div>
+                 {isDemo && (
+                   <button
+                     onClick={handleSwitchToLive}
+                     className="w-full text-left px-3 py-2 mb-1 rounded border border-emerald-200 text-emerald-700 font-semibold hover:bg-emerald-50"
+                   >
+                     Switch to Live Account
+                   </button>
+                 )}
                  <Link
                    to="/profile"
                    className="block px-3 py-2 text-[#000000] hover:bg-gray-50"

@@ -4,86 +4,94 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { socket } from "../socketClient";
 import { Toast } from "../noti/Toast";
 import { useNotificationSound } from "../noti/useNotificationSound";
-import Footer from "./Footer";
 
-// Import your existing modals
+// Optional existing modals
 import PendingOrdersModal from "./PendingOrdersModal";
 import OpenOrdersModal from "./OpenOrdersModal";
 import TradeHistoryModal from "./TradeHistoryModal";
 import Header from "./Header";
 
-// Trading constants (parity with TradePanel)
+// ---- Trading constants (parity with TradePanel) ----
 const PIP_VALUE_PER_LOT = 0.1;
 const PIP_FACTOR = 10000;
 const ONE_PIP = 1 / PIP_FACTOR;
 const FOREXFEED_APP_ID = import.meta.env.VITE_FOREXFEED_APP_ID;
 
+// Normalizes any provider code (“OANDA:EUR_USD” → “EURUSD”)
+const normalizeSymbol = (s) =>
+  String(s || "")
+    .toUpperCase()
+    .replace(/^(OANDA:|BINANCE:|FXCM:|PEPPERSTONE:)/i, "")
+    .replace(/[^A-Z]/g, ""); // drop :, _, / etc.
+
 export default function MobileDashboard({
   selectedSymbol: initialSymbol = "NZDUSD",
 }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const playChime = useNotificationSound();
   const widgetRef = useRef(null);
-  const [searchParams] = useSearchParams();
 
-  // --- Selected symbol: prefer ?symbol= from MobileCoinlist; fallback to prop; default NZDUSD
-  const fromQuery = (searchParams.get("symbol") || "")
-    .toUpperCase()
-    .replace(/[:_]/g, "")
-    .slice(0, 6);
-  const resolvedInitial =
-    fromQuery || (initialSymbol || "NZDUSD").toUpperCase();
+  // --- Selected symbol (from MobileCoinlist ?symbol=..., else prop)
+  const fromQuery = normalizeSymbol(searchParams.get("symbol"));
+  const [selectedSymbol, setSelectedSymbol] = useState(
+    normalizeSymbol(fromQuery || initialSymbol || "NZDUSD")
+  );
 
-  // Core states
-  const [selectedSymbol, setSelectedSymbol] = useState(resolvedInitial);
+  // User / auth
   const [user, setUser] = useState(null);
-  const [showSymbolSelector, setShowSymbolSelector] = useState(false);
 
-  // Price states (live)
+  // Socket status
+  const [socketConnected, setSocketConnected] = useState(false);
+
+  // Live prices
   const [bidPrice, setBidPrice] = useState(null);
   const [askPrice, setAskPrice] = useState(null);
-  const [priceChange, setPriceChange] = useState(0); // absolute delta vs previous tick
-  const [priceChangePercent, setPriceChangePercent] = useState("0.00"); // % since panel open
   const initialMidRef = useRef(null);
+  const [priceDeltaPct, setPriceDeltaPct] = useState("0.00");
 
-  // Trade states
-  const [tradeSize, setTradeSize] = useState(0.01);
+  // Chart timeframe (your UI)
   const [interval, setInterval] = useState("5");
   const [showTimePopup, setShowTimePopup] = useState(false);
-  const [showLotPopup, setShowLotPopup] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modal states
+  // Lot input
+  const [tradeSize, setTradeSize] = useState(0.01);
+  const [isEmptyTradeSize, setIsEmptyTradeSize] = useState(false);
+
+  // Advanced (TradePanel parity)
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [side, setSide] = useState(""); // "buy" | "sell"
+  const [pending, setPending] = useState(false);
+  const [orderType, setOrderType] = useState("Buy Limit");
+  const [expiryEnabled, setExpiryEnabled] = useState(true);
+  const [expiry, setExpiry] = useState(new Date().toISOString().slice(0, 16));
+  const [atPrice, setAtPrice] = useState("");
+
+  const [useSL, setUseSL] = useState(false);
+  const [slPips, setSlPips] = useState(50);
+  const [slPrice, setSlPrice] = useState(0);
+
+  const [useTP, setUseTP] = useState(false);
+  const [tpPips, setTpPips] = useState(50);
+  const [tpPrice, setTpPrice] = useState(0);
+
+  // Calculated vals
+  const [lotValueUSD, setLotValueUSD] = useState("--");
+  const [requiredMargin, setRequiredMargin] = useState("--");
+  const [freeMargin] = useState("0.00");
+
+  // Modals + toasts
   const [showPending, setShowPending] = useState(false);
   const [showOpen, setShowOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  // Toast states
   const [toastOpen, setToastOpen] = useState(false);
   const [toastData, setToastData] = useState("");
   const [toastType, setToastType] = useState("");
   const [toastTitle, setToastTitle] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Calculated values
-  const [lotValueUSD, setLotValueUSD] = useState("--");
-  const [requiredMargin, setRequiredMargin] = useState("--");
-  const [freeMargin, setFreeMargin] = useState("0.00"); // keep placeholder if backend not supplying
-
-  // Available symbols (for your selector modal)
-  const symbols = [
-    "EURUSD",
-    "GBPUSD",
-    "USDJPY",
-    "USDCHF",
-    "AUDUSD",
-    "USDCAD",
-    "NZDUSD",
-    "EURGBP",
-    "EURJPY",
-    "GBPJPY",
-  ];
-
-  // Timeframe options
+  // Timeframes for your picker
   const timeframes = [
     { label: "1 Minute", value: "1" },
     { label: "5 Minutes", value: "5" },
@@ -94,27 +102,20 @@ export default function MobileDashboard({
     { label: "1 Day", value: "D" },
   ];
 
-  // Lot size options
-  const lotSizes = [
-    { label: "0.01 Lot", value: 0.01 },
-    { label: "0.05 Lot", value: 0.05 },
-    { label: "0.10 Lot", value: 0.1 },
-    { label: "0.25 Lot", value: 0.25 },
-    { label: "0.50 Lot", value: 0.5 },
-    { label: "1.00 Lot", value: 1.0 },
-    { label: "2.00 Lot", value: 2.0 },
-    { label: "5.00 Lot", value: 5.0 },
-  ];
-
-  // Keep symbol in sync with query param and prop changes
+  // Keep symbol synced if the query/prop changes
   useEffect(() => {
-    const next = (searchParams.get("symbol") || initialSymbol || "NZDUSD")
-      .toUpperCase()
-      .replace(/[:_]/g, "")
-      .slice(0, 6);
-    if (next !== selectedSymbol) {
+    const next = normalizeSymbol(
+      searchParams.get("symbol") || initialSymbol || "NZDUSD"
+    );
+    if (next && next !== selectedSymbol) {
       setSelectedSymbol(next);
-      initialMidRef.current = null; // reset baseline for % change when symbol changes
+      initialMidRef.current = null; // reset % baseline
+      // reset advanced state on symbol change
+      setSide("");
+      setPending(false);
+      setAtPrice("");
+      setUseSL(false);
+      setUseTP(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, initialSymbol]);
@@ -126,44 +127,104 @@ export default function MobileDashboard({
     else navigate("/login");
   }, [navigate]);
 
-  // Subscribe to live ticks (same normalization as TradePanel)
+  // ---- WebSocket: force connect + status
+  useEffect(() => {
+    try {
+      if (socket && typeof socket.connect === "function" && !socket.connected) {
+        socket.connect();
+      }
+    } catch (e) {
+      console.warn("socket.connect() error:", e);
+    }
+    const onConnect = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
+    const onErr = (e) => {
+      setSocketConnected(false);
+      console.warn("Socket error:", e);
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onErr);
+    socket.on("error", onErr);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onErr);
+      socket.off("error", onErr);
+    };
+  }, []);
+
+  // ---- Subscribe/unsubscribe per symbol (if server expects it)
+  useEffect(() => {
+    const sym = selectedSymbol;
+    try {
+      socket.emit?.("subscribe", { symbol: sym });
+    } catch {}
+    return () => {
+      try {
+        socket.emit?.("unsubscribe", { symbol: sym });
+      } catch {}
+    };
+  }, [selectedSymbol]);
+
+  // ---- Ticks: handle multiple event names + field shapes
   useEffect(() => {
     const handleTick = (data) => {
-      const incoming = data.code?.replace(/(OANDA:|BINANCE:)/g, "");
-      if (incoming !== selectedSymbol) return;
+      // Support data.code / data.symbol / data.pair / data.instrument
+      const raw =
+        data?.code ?? data?.symbol ?? data?.pair ?? data?.instrument ?? "";
+      const incoming = normalizeSymbol(raw);
+      if (!incoming || incoming !== selectedSymbol) return;
 
-      const nb = data.bid != null ? parseFloat(data.bid) : null;
-      const na = data.ask != null ? parseFloat(data.ask) : null;
+      const nb = [
+        data?.bid,
+        data?.Bid,
+        data?.b,
+        data?.bestBid,
+        data?.best_bid,
+      ].find((v) => v != null);
+      const na = [
+        data?.ask,
+        data?.Ask,
+        data?.a,
+        data?.bestAsk,
+        data?.best_ask,
+      ].find((v) => v != null);
 
-      if (nb != null) {
-        setBidPrice((prev) => {
-          if (prev != null) setPriceChange(nb - prev);
-          return nb;
-        });
-      }
-      if (na != null) setAskPrice(na);
+      if (nb != null) setBidPrice(parseFloat(nb));
+      if (na != null) setAskPrice(parseFloat(na));
 
-      // % change badge since panel opened – use last_price if sent, else mid
+      const last = data?.last_price ?? data?.last ?? data?.price ?? null;
+
       const mid =
-        data.last_price != null
-          ? parseFloat(data.last_price)
+        last != null
+          ? parseFloat(last)
           : nb != null && na != null
-          ? (nb + na) / 2
+          ? (parseFloat(nb) + parseFloat(na)) / 2
           : null;
 
       if (mid != null) {
         if (initialMidRef.current == null) initialMidRef.current = mid;
         const pct =
           ((mid - initialMidRef.current) / initialMidRef.current) * 100;
-        if (isFinite(pct)) setPriceChangePercent(pct.toFixed(2));
+        if (isFinite(pct)) setPriceDeltaPct(pct.toFixed(2));
       }
     };
 
+    // Listen to a couple of common names
     socket.on("tick", handleTick);
-    return () => socket.off("tick", handleTick);
+    socket.on("ticker", handleTick);
+    socket.on("price", handleTick);
+    return () => {
+      socket.off("tick", handleTick);
+      socket.off("ticker", handleTick);
+      socket.off("price", handleTick);
+    };
   }, [selectedSymbol]);
 
-  // Initialize TradingView Chart (keeps your UI)
+  // ---- TradingView chart (unchanged UI)
   useEffect(() => {
     if (!window.TradingView) {
       const script = document.createElement("script");
@@ -174,20 +235,17 @@ export default function MobileDashboard({
     } else {
       initializeChart();
     }
-
     function initializeChart() {
       if (widgetRef.current) {
         try {
           widgetRef.current.remove?.();
-        } catch (e) {
-          console.warn("Chart cleanup error:", e);
-        }
+        } catch {}
       }
       // eslint-disable-next-line no-undef
       widgetRef.current = new window.TradingView.widget({
         autosize: true,
         symbol: `OANDA:${selectedSymbol}`,
-        interval: interval,
+        interval,
         timezone: "exchange",
         theme: "dark",
         style: "1",
@@ -206,12 +264,11 @@ export default function MobileDashboard({
     }
   }, [selectedSymbol, interval]);
 
-  // Calculate USD value & required margin (same flow as TradePanel)
+  // ---- USD value & required margin (TradePanel logic)
   useEffect(() => {
     let cancelled = false;
     const leverage = 400;
     const base = selectedSymbol.slice(0, 3);
-
     (async () => {
       try {
         const units = (tradeSize * 100000).toFixed(2);
@@ -227,13 +284,11 @@ export default function MobileDashboard({
         }
       }
     })();
-
     return () => {
       cancelled = true;
     };
   }, [tradeSize, selectedSymbol]);
 
-  // Currency conversion (same parser as TradePanel)
   async function convertCurrency(amount, from) {
     const to = "USD";
     const url = `http://api.forexfeed.net/convert/${FOREXFEED_APP_ID}/${amount}/${from}/${to}`;
@@ -249,24 +304,147 @@ export default function MobileDashboard({
     throw new Error("Conversion failed");
   }
 
-  // Derived UI values
+  // ---- SL/TP linkage (TradePanel parity)
+  useEffect(() => {
+    if (!side || (bidPrice == null && askPrice == null)) return;
+    const entry = side === "buy" ? askPrice : bidPrice;
+    if (!entry) return;
+    setAtPrice(entry.toFixed(5));
+    setSlPrice(
+      (entry + (side === "buy" ? -slPips : slPips) * ONE_PIP).toFixed(5)
+    );
+    setTpPrice(
+      (entry + (side === "buy" ? tpPips : -tpPips) * ONE_PIP).toFixed(5)
+    );
+  }, [side, bidPrice, askPrice, slPips, tpPips]);
+
+  const handleSlPipsChange = (newPips) => {
+    setSlPips(newPips);
+    if (!atPrice) return;
+    const base = parseFloat(atPrice);
+    const price =
+      side === "buy" ? base - newPips * ONE_PIP : base + newPips * ONE_PIP;
+    setSlPrice(price.toFixed(5));
+  };
+  const handleSlPriceChange = (newPrice) => {
+    setSlPrice(newPrice);
+    if (!atPrice) return;
+    const diff =
+      side === "buy"
+        ? (parseFloat(atPrice) - newPrice) * PIP_FACTOR
+        : (newPrice - parseFloat(atPrice)) * PIP_FACTOR;
+    setSlPips(Math.max(0, Math.round(diff)));
+  };
+  const handleTpPipsChange = (newPips) => {
+    setTpPips(newPips);
+    if (!atPrice) return;
+    const base = parseFloat(atPrice);
+    const price =
+      side === "buy" ? base + newPips * ONE_PIP : base - newPips * ONE_PIP;
+    setTpPrice(price.toFixed(5));
+  };
+  const handleTpPriceChange = (newPrice) => {
+    setTpPrice(newPrice);
+    if (!atPrice) return;
+    const diff =
+      side === "buy"
+        ? (newPrice - parseFloat(atPrice)) * PIP_FACTOR
+        : (parseFloat(atPrice) - newPrice) * PIP_FACTOR;
+    setTpPips(Math.max(0, Math.round(diff)));
+  };
+
+  // ---- Lot input behavior (clamp like desktop)
+  const onTradeSizeChange = (e) => {
+    const v = e.target.value;
+    if (v === "") {
+      setIsEmptyTradeSize(true);
+      return;
+    }
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+      setIsEmptyTradeSize(false);
+      setTradeSize(n);
+    }
+  };
+  const onTradeSizeBlur = () => {
+    if (isEmptyTradeSize) {
+      setTradeSize(0.01);
+      setIsEmptyTradeSize(false);
+      return;
+    }
+    if (tradeSize < 0.01) setTradeSize(0.01);
+    else if (tradeSize > 100) setTradeSize(100);
+    else setTradeSize(+tradeSize.toFixed(2));
+  };
+
+  // ---- Derived UI values
+  const lotSizeUnits = useMemo(() => tradeSize * 100000, [tradeSize]);
+  const pipValue = useMemo(
+    () => (tradeSize * PIP_VALUE_PER_LOT).toFixed(2),
+    [tradeSize]
+  );
   const spread = useMemo(() => {
     if (bidPrice == null || askPrice == null) return "0.0";
     return ((askPrice - bidPrice) * PIP_FACTOR).toFixed(1);
   }, [bidPrice, askPrice]);
-
-  const pipValue = useMemo(() => {
-    return (tradeSize * PIP_VALUE_PER_LOT).toFixed(2);
-  }, [tradeSize]);
-
   const priceClass =
-    Number(priceChangePercent) > 0
+    Number(priceDeltaPct) > 0
       ? "positive"
-      : Number(priceChangePercent) < 0
+      : Number(priceDeltaPct) < 0
       ? "negative"
       : "neutral";
 
-  // ------- Place trade (logic parity with TradePanel) -------
+  // ---- Order type derivation (TradePanel)
+  const derivedOrderType = useMemo(() => {
+    if (!pending) return "market";
+    return orderType.split(" ")[1].toLowerCase(); // "limit" | "stop"
+  }, [pending, orderType]);
+
+  // ---- Payload builder (TradePanel parity)
+  const payload = useMemo(() => {
+    const base = {
+      symbol: selectedSymbol,
+      side,
+      order_type: derivedOrderType,
+      volume: tradeSize,
+      leverage: 400,
+      stop_loss_price: useSL ? parseFloat(slPrice) : null,
+      take_profit_price: useTP ? parseFloat(tpPrice) : null,
+    };
+    if (derivedOrderType === "market") {
+      base.open_price =
+        side === "buy" ? parseFloat(askPrice) : parseFloat(bidPrice);
+    }
+    if (pending) {
+      base.trigger_price = parseFloat(atPrice);
+      base.expiry = expiryEnabled ? expiry : null;
+    }
+    return base;
+  }, [
+    selectedSymbol,
+    side,
+    derivedOrderType,
+    tradeSize,
+    slPrice,
+    tpPrice,
+    useSL,
+    useTP,
+    pending,
+    atPrice,
+    expiry,
+    expiryEnabled,
+    bidPrice,
+    askPrice,
+  ]);
+
+  // ---- Validation (TradePanel)
+  const isReadyToTrade =
+    !!side &&
+    (!pending || !!atPrice) &&
+    (!useSL || slPips > 0) &&
+    (!useTP || tpPips > 0);
+
+  // ---- API normalizer (TradePanel)
   function normalizeApi(json, httpOk = true) {
     if (typeof json?.ok === "boolean") {
       return {
@@ -296,23 +474,10 @@ export default function MobileDashboard({
     };
   }
 
-  const handleTrade = async (side) => {
-    if (!user?.token) {
-      navigate("/login");
-      return;
-    }
+  // ---- Place advanced order (market or pending, uses full payload)
+  const placeAdvancedOrder = async () => {
+    if (!user?.token) return navigate("/login");
     setIsSubmitting(true);
-
-    // Build payload like TradePanel (market)
-    const payload = {
-      symbol: selectedSymbol,
-      side,
-      order_type: "market",
-      volume: tradeSize,
-      leverage: 400,
-      open_price: side === "buy" ? parseFloat(askPrice) : parseFloat(bidPrice),
-    };
-
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/place`, {
         method: "POST",
@@ -322,21 +487,18 @@ export default function MobileDashboard({
         },
         body: JSON.stringify(payload),
       });
-
       let body;
       try {
         body = await res.json();
       } catch {
         body = { message: "Invalid JSON from server" };
       }
-
       const norm = normalizeApi(body, res.ok);
 
       if (!res.ok || !norm.ok) {
         let title = "Trade Rejected";
         let type = "error";
         let desc = norm.message || "Request failed.";
-
         if (norm.code === "INSUFFICIENT_MARGIN") {
           title = "Insufficient Margin make Deposit First";
           type = "warning";
@@ -344,42 +506,125 @@ export default function MobileDashboard({
           title = "Invalid Volume Step";
           type = "warning";
           const d = norm.details || {};
-          if (d.step != null && d.requested != null) {
+          if (d.step != null && d.requested != null)
             desc = `Volume must be in steps of ${d.step}. You entered ${d.requested}.`;
-          }
         } else if (norm.code === "VOLUME_OUT_OF_RANGE") {
           title = "Volume Out of Range";
           type = "warning";
           const d = norm.details || {};
-          if (d.min != null && d.max != null && d.requested != null) {
+          if (d.min != null && d.max != null && d.requested != null)
             desc = `Allowed: ${d.min}–${d.max}. You entered ${d.requested}.`;
-          }
         } else if (body?.errors) {
           title = "Validation Error";
           type = "error";
           const list = Object.values(body.errors).flat();
           desc = list.join(" • ");
         }
-
         setToastTitle(title);
         setToastData(desc);
         setToastType(type);
         setToastOpen(true);
         return;
       }
-
       const successTitle =
         norm.code === "ORDER_QUEUED"
           ? "Order Queued"
           : "Trade Placed Successfully";
-      const successMsg =
-        norm.message ||
-        (norm.code === "ORDER_QUEUED"
-          ? "Your order has been accepted and queued for execution."
-          : "Your order has been executed.");
-
       setToastTitle(successTitle);
-      setToastData(`${side.toUpperCase()} ${tradeSize} lots ${selectedSymbol}`);
+      setToastData(norm.message || "Your order has been accepted.");
+      setToastType("success");
+      setToastOpen(true);
+      playChime();
+    } catch (err) {
+      console.error("Network error:", err);
+      setToastTitle("Network Error");
+      setToastData("We couldn't reach the server. Please try again.");
+      setToastType("error");
+      setToastOpen(true);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ---- Market buttons (bottom bar)
+  const placeMarketTrade = async (actionSide) => {
+    if (!user?.token) return navigate("/login");
+    if (
+      (actionSide === "buy" && !askPrice) ||
+      (actionSide === "sell" && !bidPrice)
+    ) {
+      setToastTitle("Prices Unavailable");
+      setToastData("Waiting for live prices. Try again in a moment.");
+      setToastType("warning");
+      setToastOpen(true);
+      return;
+    }
+    setIsSubmitting(true);
+    const marketPayload = {
+      symbol: selectedSymbol,
+      side: actionSide,
+      order_type: "market",
+      volume: Number(tradeSize),
+      leverage: 400,
+      open_price: actionSide === "buy" ? Number(askPrice) : Number(bidPrice),
+      stop_loss_price: useSL ? parseFloat(slPrice) : null,
+      take_profit_price: useTP ? parseFloat(tpPrice) : null,
+    };
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/place`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify(marketPayload),
+      });
+      let body;
+      try {
+        body = await res.json();
+      } catch {
+        body = { message: "Invalid JSON from server" };
+      }
+      const norm = normalizeApi(body, res.ok);
+      if (!res.ok || !norm.ok) {
+        let title = "Trade Rejected";
+        let type = "error";
+        let desc = norm.message || "Request failed.";
+        if (norm.code === "INSUFFICIENT_MARGIN") {
+          title = "Insufficient Margin make Deposit First";
+          type = "warning";
+        } else if (norm.code === "VOLUME_STEP_INVALID") {
+          title = "Invalid Volume Step";
+          type = "warning";
+          const d = norm.details || {};
+          if (d.step != null && d.requested != null)
+            desc = `Volume must be in steps of ${d.step}. You entered ${d.requested}.`;
+        } else if (norm.code === "VOLUME_OUT_OF_RANGE") {
+          title = "Volume Out of Range";
+          type = "warning";
+          const d = norm.details || {};
+          if (d.min != null && d.max != null && d.requested != null)
+            desc = `Allowed: ${d.min}–${d.max}. You entered ${d.requested}.`;
+        } else if (body?.errors) {
+          title = "Validation Error";
+          type = "error";
+          const list = Object.values(body.errors).flat();
+          desc = list.join(" • ");
+        }
+        setToastTitle(title);
+        setToastData(desc);
+        setToastType(type);
+        setToastOpen(true);
+        return;
+      }
+      const successTitle =
+        norm.code === "ORDER_QUEUED"
+          ? "Order Queued"
+          : "Trade Placed Successfully";
+      setToastTitle(successTitle);
+      setToastData(
+        `${actionSide.toUpperCase()} ${tradeSize} lots ${selectedSymbol}`
+      );
       setToastType("success");
       setToastOpen(true);
       playChime();
@@ -399,7 +644,7 @@ export default function MobileDashboard({
       <style jsx>{`
         .mobile-trading-dashboard {
           font-family: "Segoe UI", Roboto, Arial, sans-serif;
-          background-color: #1e1f2a;
+          background: #1e1f2a;
           color: white;
           display: flex;
           flex-direction: column;
@@ -412,7 +657,7 @@ export default function MobileDashboard({
           align-items: center;
           justify-content: space-between;
           padding: 16px;
-          background-color: #14151f;
+          background: #14151f;
           border-bottom: 1px solid #333;
         }
         .back-button {
@@ -429,7 +674,7 @@ export default function MobileDashboard({
           font-weight: 600;
         }
         .market-status {
-          background-color: #3c3f50;
+          background: #3c3f50;
           text-align: center;
           padding: 10px;
           font-size: 14px;
@@ -454,7 +699,6 @@ export default function MobileDashboard({
         }
         .dropdown-arrow {
           font-size: 12px;
-          transition: transform 0.2s ease;
         }
         .price {
           font-size: 20px;
@@ -480,7 +724,7 @@ export default function MobileDashboard({
         #mobile-tradingview-chart {
           width: 100%;
           height: 100%;
-          background-color: #14151f;
+          background: #14151f;
           border: 1px solid #333;
           border-radius: 8px;
         }
@@ -489,7 +733,7 @@ export default function MobileDashboard({
           justify-content: space-around;
           padding: 12px 0;
           font-size: 13px;
-          background-color: #2a2c3a;
+          background: #2a2c3a;
           flex-wrap: wrap;
           gap: 10px;
         }
@@ -503,95 +747,121 @@ export default function MobileDashboard({
           justify-content: space-around;
           align-items: center;
           padding: 12px 10px;
-          background-color: #1f202c;
+          background: #1f202c;
           border-top: 1px solid #333;
           border-bottom: 1px solid #333;
           flex-wrap: wrap;
           gap: 10px;
         }
-        .control-item-container {
-          position: relative;
-          display: inline-block;
-        }
-        .control-item {
-          background-color: #2d2f3e;
-          padding: 10px 14px;
-          border-radius: 8px;
-          font-size: 14px;
-          cursor: pointer;
-          transition: background-color 0.2s ease;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          min-width: 60px;
-          justify-content: center;
-          white-space: nowrap;
-          border: none;
-          color: white;
-        }
-        .control-item:hover {
-          background-color: #3d3f4e;
-        }
         .time-dropdown {
           position: relative;
         }
         .time-box {
-          background-color: #2d2f3e;
+          background: #2d2f3e;
           padding: 7px 12px;
           border-radius: 8px;
-          cursor: pointer;
           display: flex;
           align-items: center;
           gap: 6px;
-          transition: background-color 0.2s ease;
-          white-space: nowrap;
           border: none;
           color: white;
         }
         .time-box:hover {
-          background-color: #3d3f4e;
+          background: #3d3f4e;
         }
-        .time-popup,
-        .lot-popup {
-          position: absolute;
-          top: 50px;
-          left: 0;
-          background-color: #1e1f2a;
-          border: 1px solid #333;
-          border-radius: 8px;
-          padding: 10px;
-          z-index: 100;
-          width: 180px;
+        .lot-input-wrap {
           display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          align-items: center;
+          gap: 6px;
+          background: #2d2f3e;
+          padding: 8px 10px;
+          border-radius: 8px;
         }
-        .time-option,
-        .lot-option {
-          flex: 1 1 40%;
-          text-align: center;
-          background-color: #2d2f3e;
-          padding: 10px;
-          border-radius: 6px;
-          cursor: pointer;
-          color: white;
+        .lot-input {
+          width: 90px;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: #fff;
+          text-align: right;
           font-size: 14px;
+        }
+        .lot-suffix {
+          font-size: 12px;
+          color: #c9c9c9;
+        }
+        .adv-toggle {
+          background: #2d2f3e;
+          padding: 7px 12px;
+          border-radius: 8px;
+          border: none;
+          color: #fff;
+        }
+        .adv-wrap {
+          background: #1e1f2a;
+          border-top: 1px solid #333;
+          padding: 12px;
+        }
+        .adv-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        .box {
+          background: #1a1f27;
           border: 1px solid #444;
-          transition: all 0.2s ease;
+          border-radius: 8px;
+          padding: 8px;
+          color: white;
         }
-        .time-option:hover,
-        .lot-option:hover {
-          background-color: #3d3f4f;
+        .box input,
+        .box select {
+          width: 100%;
+          background: transparent;
+          border: none;
+          outline: none;
+          color: white;
+          text-align: right;
         }
-        .time-option.active,
-        .lot-option.active {
-          background-color: white;
-          color: black;
+        .side-row {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .btn-sell {
+          flex: 1;
+          padding: 10px;
+          border-radius: 8px;
+          border: 1px solid #e04d4d;
+          color: #e04d4d;
+          background: transparent;
+        }
+        .btn-buy {
+          flex: 1;
+          padding: 10px;
+          border-radius: 8px;
+          border: 1px solid #00e092;
+          color: #00e092;
+          background: transparent;
+        }
+        .btn-sell.active {
+          background: #e04d4d33;
+          color: #fff;
+        }
+        .btn-buy.active {
+          background: #00e09233;
+          color: #fff;
+        }
+        .place-btn {
+          width: 100%;
+          padding: 12px;
+          border-radius: 10px;
+          border: none;
+          background: #2563eb;
+          color: white;
           font-weight: 600;
-        }
-        .hidden {
-          display: none;
         }
         .spread {
           position: fixed;
@@ -613,7 +883,7 @@ export default function MobileDashboard({
           bottom: 0;
           left: 0;
           width: 100%;
-          background-color: #14151f;
+          background: #14151f;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -621,8 +891,8 @@ export default function MobileDashboard({
           border-top: 1px solid #333;
           gap: 12px;
         }
-        .buy,
-        .sell {
+        .sell,
+        .buy {
           flex: 1;
           padding: 16px 12px;
           font-size: 18px;
@@ -630,28 +900,26 @@ export default function MobileDashboard({
           text-align: center;
           border-radius: 8px;
           color: #fff;
-          cursor: pointer;
-          transition: all 0.2s ease;
           border: none;
           display: flex;
           flex-direction: column;
           align-items: center;
         }
+        .sell {
+          background: #e04d4d;
+        }
+        .sell:hover:not(:disabled) {
+          background: #d04242;
+        }
         .buy {
-          background-color: #00e092;
+          background: #00e092;
           color: #000;
         }
         .buy:hover:not(:disabled) {
-          background-color: #00c982;
+          background: #00c982;
         }
-        .sell {
-          background-color: #e04d4d;
-        }
-        .sell:hover:not(:disabled) {
-          background-color: #d04242;
-        }
-        .buy:disabled,
-        .sell:disabled {
+        .sell:disabled,
+        .buy:disabled {
           opacity: 0.6;
           cursor: not-allowed;
         }
@@ -659,61 +927,6 @@ export default function MobileDashboard({
           font-size: 16px;
           margin-top: 4px;
           font-weight: 600;
-        }
-        .symbol-selector {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background: rgba(0, 0, 0, 0.8);
-          z-index: 1000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-        }
-        .symbol-list {
-          background: #1e1f2a;
-          border-radius: 12px;
-          padding: 20px;
-          max-width: 300px;
-          width: 100%;
-          max-height: 80vh;
-          overflow-y: auto;
-        }
-        .symbol-list h3 {
-          margin: 0 0 15px 0;
-          text-align: center;
-        }
-        .symbol-item {
-          display: block;
-          width: 100%;
-          background: #2d2f3e;
-          border: none;
-          color: white;
-          padding: 12px;
-          margin-bottom: 8px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: background-color 0.2s ease;
-        }
-        .symbol-item:hover {
-          background: #3d3f4e;
-        }
-        .symbol-item.active {
-          background: #00e092;
-          color: black;
-        }
-        .close-btn {
-          position: absolute;
-          top: 15px;
-          right: 20px;
-          background: none;
-          border: none;
-          color: white;
-          font-size: 24px;
-          cursor: pointer;
         }
         @media (max-width: 600px) {
           .chart-container {
@@ -726,12 +939,8 @@ export default function MobileDashboard({
             padding: 10px 8px;
             gap: 8px;
           }
-          .control-item {
-            padding: 8px 10px;
-            font-size: 12px;
-          }
-          .buy,
-          .sell {
+          .sell,
+          .buy {
             font-size: 16px;
           }
         }
@@ -742,45 +951,37 @@ export default function MobileDashboard({
           .trade-info {
             font-size: 10px;
           }
-          .buy,
-          .sell {
+          .sell,
+          .buy {
             font-size: 15px;
             padding: 12px 6px;
           }
         }
       `}</style>
+      <Header />
 
-      {/* Top Bar */}
-      <div className="">
-        <div className="mobile-header">
-          <button className="back-button" onClick={() => navigate("/markets")}>
-            ← Back to Markets
-          </button>
-          <div className="header-title">Trading</div>
-        </div>
+      {/* Header */}
+      <div className="mobile-header">
+        <button className="back-button" onClick={() => navigate("/markets")}>
+          ← Back to Markets
+        </button>
       </div>
 
-      {/* Market Status */}
-      <div className="market-status">
-        Market is Open - Live Trading Available
-      </div>
-
-      {/* Chart Header */}
-      <div className="chart-header" onClick={() => setShowSymbolSelector(true)}>
+      {/* Chart Header (tap -> open orders modal, same as your UI idea) */}
+      <div className="chart-header" onClick={() => setShowOpen(true)}>
         <h2>
-          {selectedSymbol}
-          <span className="dropdown-arrow">▼</span>
+          {selectedSymbol} <span className="dropdown-arrow">▼</span>
         </h2>
         <div className={`price ${priceClass}`}>
           {bidPrice != null ? bidPrice.toFixed(5) : "--"}{" "}
           <span>
-            ({Number(priceChange) >= 0 ? "+" : ""}
-            {priceChangePercent}%)
+            ({Number(priceDeltaPct) >= 0 ? "+" : ""}
+            {priceDeltaPct}%)
           </span>
         </div>
       </div>
 
-      {/* Chart Container */}
+      {/* Chart */}
       <div className="chart-container">
         <div id="mobile-tradingview-chart"></div>
       </div>
@@ -794,6 +995,7 @@ export default function MobileDashboard({
 
       {/* Controls */}
       <div className="controls">
+        {/* Timeframe */}
         <div className="time-dropdown">
           <button
             className="time-box"
@@ -805,9 +1007,9 @@ export default function MobileDashboard({
           {!showTimePopup ? null : (
             <div className="time-popup">
               {timeframes.map((tf) => (
-                <div
+                <button
                   key={tf.value}
-                  className={`time-option ${
+                  className={`time-box ${
                     interval === tf.value ? "active" : ""
                   }`}
                   onClick={() => {
@@ -816,56 +1018,229 @@ export default function MobileDashboard({
                   }}
                 >
                   {tf.label}
-                </div>
+                </button>
               ))}
             </div>
           )}
         </div>
 
-        <div className="control-item-container">
-          <button
-            className="control-item"
-            onClick={() => setShowLotPopup(!showLotPopup)}
-          >
-            <span>👤</span> {tradeSize} Lot
-          </button>
-          {!showLotPopup ? null : (
-            <div className="lot-popup">
-              {lotSizes.map((lot) => (
-                <div
-                  key={lot.value}
-                  className={`lot-option ${
-                    tradeSize === lot.value ? "active" : ""
-                  }`}
-                  onClick={() => {
-                    setTradeSize(lot.value);
-                    setShowLotPopup(false);
-                  }}
-                >
-                  {lot.label}
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Editable Lot input */}
+        <div className="lot-input-wrap" title="Lot size">
+          <span>👤</span>
+          <input
+            className="lot-input"
+            type="number"
+            step="0.01"
+            min="0.01"
+            max="100"
+            value={isEmptyTradeSize ? "" : tradeSize}
+            onChange={onTradeSizeChange}
+            onBlur={onTradeSizeBlur}
+            inputMode="decimal"
+          />
+          <span className="lot-suffix">Lot</span>
         </div>
 
-        <button className="control-item" onClick={() => setShowPending(true)}>
-          <span>⏱️</span> Pending
+        {/* Advanced toggle */}
+        <button
+          className="adv-toggle"
+          onClick={() => setShowAdvanced((s) => !s)}
+        >
+          ⚙️ {showAdvanced ? "Hide" : "Advanced"}
         </button>
 
-        <button className="control-item" onClick={() => setShowHistory(true)}>
+        {/* Quick modals */}
+        <button className="time-box" onClick={() => setShowPending(true)}>
+          <span>⏱️</span> Pending
+        </button>
+        <button className="time-box" onClick={() => setShowHistory(true)}>
           <span>📊</span> History
         </button>
       </div>
 
-      {/* Spread */}
+      {/* Advanced area (TradePanel features) */}
+      {showAdvanced && (
+        <div className="adv-wrap">
+          <div className="side-row">
+            <button
+              className={`btn-sell ${side === "sell" ? "active" : ""}`}
+              onClick={() => setSide("sell")}
+            >
+              SELL {bidPrice != null ? bidPrice.toFixed(5) : "--"}
+            </button>
+            <button
+              className={`btn-buy ${side === "buy" ? "active" : ""}`}
+              onClick={() => setSide("buy")}
+            >
+              BUY {askPrice != null ? askPrice.toFixed(5) : "--"}
+            </button>
+          </div>
+
+          <div className="adv-row">
+            <div>Set pending order</div>
+            <div style={{ textAlign: "right" }}>
+              <input
+                type="checkbox"
+                checked={pending}
+                onChange={() => setPending((p) => !p)}
+                disabled={!side}
+              />
+            </div>
+          </div>
+
+          {pending && (
+            <>
+              <div className="adv-row">
+                <div>At price</div>
+                <div className="box">
+                  <input
+                    type="number"
+                    step="0.00001"
+                    value={atPrice}
+                    onChange={(e) => setAtPrice(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="adv-row">
+                <div>Type</div>
+                <div className="box">
+                  <select
+                    value={orderType}
+                    onChange={(e) => setOrderType(e.target.value)}
+                  >
+                    {["Buy Limit", "Sell Limit", "Buy Stop", "Sell Stop"].map(
+                      (t) => (
+                        <option key={t}>{t}</option>
+                      )
+                    )}
+                  </select>
+                </div>
+              </div>
+              <div className="adv-row">
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 8 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={expiryEnabled}
+                    onChange={() => setExpiryEnabled((e) => !e)}
+                  />
+                  Expiry
+                </label>
+                <div className="box">
+                  <input
+                    type="datetime-local"
+                    value={expiry}
+                    onChange={(e) => setExpiry(e.target.value)}
+                    disabled={!expiryEnabled}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="adv-row">
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={useSL}
+                onChange={() => setUseSL((u) => !u)}
+                disabled={!side}
+              />
+              Stop Loss
+            </label>
+            <div className="box">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={slPips}
+                onChange={(e) => handleSlPipsChange(+e.target.value)}
+                disabled={!useSL}
+              />
+            </div>
+          </div>
+          <div className="adv-row">
+            <div>SL Price</div>
+            <div className="box">
+              <input
+                type="number"
+                step="0.00001"
+                value={slPrice}
+                onChange={(e) => handleSlPriceChange(+e.target.value)}
+                disabled={!useSL}
+              />
+            </div>
+          </div>
+
+          <div className="adv-row">
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={useTP}
+                onChange={() => setUseTP((u) => !u)}
+                disabled={!side}
+              />
+              Take Profit
+            </label>
+            <div className="box">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={tpPips}
+                onChange={(e) => handleTpPipsChange(+e.target.value)}
+                disabled={!useTP}
+              />
+            </div>
+          </div>
+          <div className="adv-row">
+            <div>TP Price</div>
+            <div className="box">
+              <input
+                type="number"
+                step="0.00001"
+                value={tpPrice}
+                onChange={(e) => handleTpPriceChange(+e.target.value)}
+                disabled={!useTP}
+              />
+            </div>
+          </div>
+
+          <button
+            className="place-btn"
+            onClick={placeAdvancedOrder}
+            disabled={!isReadyToTrade || isSubmitting}
+          >
+            {isSubmitting ? "Placing..." : "Place Order"}
+          </button>
+
+          <div className="trade-info" style={{ marginTop: 8 }}>
+            <div>
+              {tradeSize.toFixed(2)} Lot: {lotSizeUnits.toLocaleString()}{" "}
+              {selectedSymbol.slice(0, 3)}
+            </div>
+            <div>Pip Value: ${pipValue}</div>
+            <div>
+              Required Margin:{" "}
+              {requiredMargin === "--" ? "…" : `$${requiredMargin}`}
+            </div>
+            <div>Spread: {spread} Pips</div>
+          </div>
+        </div>
+      )}
+
+      {/* Spread pill */}
       <div className="spread">{spread} PIPS</div>
 
-      {/* Bottom Trading Bar */}
+      {/* Bottom bar (market orders) */}
       <div className="bottom-bar">
         <button
           className="sell"
-          onClick={() => handleTrade("sell")}
+          onClick={() => {
+            setSide("sell");
+            placeMarketTrade("sell");
+          }}
           disabled={isSubmitting || bidPrice == null}
         >
           SELL
@@ -875,7 +1250,10 @@ export default function MobileDashboard({
         </button>
         <button
           className="buy"
-          onClick={() => handleTrade("buy")}
+          onClick={() => {
+            setSide("buy");
+            placeMarketTrade("buy");
+          }}
           disabled={isSubmitting || askPrice == null}
         >
           BUY
@@ -885,37 +1263,7 @@ export default function MobileDashboard({
         </button>
       </div>
 
-      {/* Symbol Selector Modal */}
-      {showSymbolSelector && (
-        <div className="symbol-selector">
-          <div className="symbol-list">
-            <button
-              className="close-btn"
-              onClick={() => setShowSymbolSelector(false)}
-            >
-              ×
-            </button>
-            <h3>Select Trading Pair</h3>
-            {symbols.map((symbol) => (
-              <button
-                key={symbol}
-                className={`symbol-item ${
-                  selectedSymbol === symbol ? "active" : ""
-                }`}
-                onClick={() => {
-                  setSelectedSymbol(symbol);
-                  initialMidRef.current = null; // reset baseline for %
-                  setShowSymbolSelector(false);
-                }}
-              >
-                {symbol}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
+      {/* Toast */}
       <Toast
         open={toastOpen}
         onOpenChange={setToastOpen}

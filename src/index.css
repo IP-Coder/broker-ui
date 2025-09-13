@@ -75,6 +75,15 @@ button:focus-visible {
   --sb-thumb-hover: #181C23;
   --sb-track: transparent;           /* keep track invisible */
 }
+body {
+  background-color: #0F1420; /* keeps your existing dark background */
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+    url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjYiPgo8cmVjdCB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSIjMTAxMzE5Ij48L3JlY3Q+CjxwYXRoIGQ9Ik0wIDZMNiAwWk03IC0xTC0xIDdNNSA2TDYgNVotMSAxTDEgLTFaIiBzdHJva2U9IiMxNzFkMjgiIHN0cm9rZS13aWR0aD0iMC41Ij48L3BhdGg+Cjwvc3ZnPg==');
+  background-repeat: repeat;
+  background-size: auto;
+}
 
 /* Firefox */
 html, * {
@@ -125,3 +134,4 @@ input::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
