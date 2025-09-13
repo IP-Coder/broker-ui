@@ -263,7 +263,6 @@ export default function UserProfile() {
           <div className="bg-[#0B1B7F] px-5 py-4 flex items-center justify-between">
             <h2 className="text-xl sm:text-2xl font-extrabold">My Profile</h2>
           </div>
-          TabButton
           {/* Tabs */}
           <div className="px-3 sm:px-5 pt-3">
             <div className="flex flex-wrap gap-2">
