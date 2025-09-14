@@ -444,9 +444,9 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                 </span>
                 <span
                   className={`w-1/6 flex justify-end items-center text-sm ${
-                    asset.direction === "up"
+                    asset.changePercent > 0
                       ? "text-green-500"
-                      : asset.direction === "down"
+                      : asset.changePercent < 0
                       ? "text-red-500"
                       : "text-gray-200"
                   }`}
@@ -455,6 +455,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
                     ? `${asset.changePercent.toFixed(2)}%`
                     : "0.00%"}
                 </span>
+
                 <span className="w-2/6 text-center text-gray-300 text-sm truncate">
                   {asset.high != null && asset.low != null
                     ? `${formatSixDigits(asset.high)}/${formatSixDigits(
