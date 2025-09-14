@@ -1023,10 +1023,14 @@ export default function MobileDashboard({
             </div>
           )}
         </div>
-
+        <button
+          className="adv-toggle"
+          onClick={() => setShowAdvanced((s) => !s)}
+        >
+          ⚙️ {showAdvanced ? "Hide" : "Advanced"}
+        </button>
         {/* Editable Lot input */}
         <div className="lot-input-wrap" title="Lot size">
-          <span>👤</span>
           <input
             className="lot-input"
             type="number"
@@ -1042,12 +1046,6 @@ export default function MobileDashboard({
         </div>
 
         {/* Advanced toggle */}
-        <button
-          className="adv-toggle"
-          onClick={() => setShowAdvanced((s) => !s)}
-        >
-          ⚙️ {showAdvanced ? "Hide" : "Advanced"}
-        </button>
 
         {/* Quick modals */}
         <button className="time-box" onClick={() => setShowPending(true)}>
@@ -1055,6 +1053,9 @@ export default function MobileDashboard({
         </button>
         <button className="time-box" onClick={() => setShowHistory(true)}>
           <span>📊</span> History
+        </button>
+        <button className="time-box" onClick={() => setShowOpen(true)}>
+          <span>📊</span> Open Trades
         </button>
       </div>
 

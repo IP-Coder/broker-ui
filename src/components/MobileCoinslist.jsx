@@ -16,6 +16,19 @@ const getCategory = (symbolObj) => {
   return "Currencies";
 };
 
+// 🕒 U.S. (New York) weekend helper
+const isUSWeekend = () => {
+  try {
+    const nyString = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+    const nyDate = new Date(nyString);
+    const day = nyDate.getDay(); // 0 = Sun, 6 = Sat
+    return day === 0 || day === 6;
+  } catch {
+    const d = new Date().getDay();
+    return d === 0 || d === 6;
+  }
+};
+
 function formatSixDigits(raw) {
   if (raw == null || raw === "") return "--";
   const n = Number(raw);
@@ -55,6 +68,16 @@ export default function MobileCoinslist() {
   const [symbols, setSymbols] = useState([]); // live list from DB + socket
   const flatFlags = Array.isArray(flagsData[0]) ? flagsData[0] : flagsData;
 
+  // ⏰ Weekend state + dismissable alert
+  const [isWeekend, setIsWeekend] = useState(isUSWeekend());
+  const [showWeekendAlert, setShowWeekendAlert] = useState(false);
+
+  // keep weekend status fresh (in case app stays open over midnight)
+  useEffect(() => {
+    const id = setInterval(() => setIsWeekend(isUSWeekend()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // 1) Auth bootstrap
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -77,13 +100,10 @@ export default function MobileCoinslist() {
           const rawSymbol = s.symbol.includes(":")
             ? s.symbol.split(":")[1]
             : s.symbol;
-
           const baseCode = rawSymbol.slice(0, 3);
           const quoteCode = rawSymbol.slice(3, 6);
-
           const baseFlagObj = flatFlags.find((f) => f.code === baseCode);
           const quoteFlagObj = flatFlags.find((f) => f.code === quoteCode);
-
           return {
             ...s,
             displaySymbol: rawSymbol, // used for UI + categorization
@@ -117,19 +137,15 @@ export default function MobileCoinslist() {
       const incoming = (data.code || "")
         .replace(/(OANDA:|BINANCE:)/g, "")
         .replace(":", "_");
-
       setSymbols((prev) =>
         prev.map((a) => {
           if (a.safeSymbol !== incoming) return a;
-
           let updated = { ...a };
-
           if (data.last_price != null) {
             const mid = parseFloat(data.last_price);
             const init = a.initialPrice ?? mid;
             const dir = mid > init ? "up" : mid < init ? "down" : "same";
             const pct = data.change ?? a.changePercent;
-
             updated = {
               ...updated,
               price: mid,
@@ -146,12 +162,10 @@ export default function MobileCoinslist() {
             updated.askSize = data.ask_size ?? data.askSize;
           if (data.bid_size != null || data.bidSize != null)
             updated.bidSize = data.bid_size ?? data.bidSize;
-
           return updated;
         })
       );
     };
-
     socket.on("tick", onTick);
     return () => socket.off("tick", onTick);
   }, []);
@@ -176,8 +190,16 @@ export default function MobileCoinslist() {
     })();
   }, [user]);
 
-  // 5) Toggle favourite (API first; graceful fallback)
+  // 5) Toggle favourite (blocked only for Currencies & Commodities on U.S. weekends)
   const toggleFavourite = async (symbol) => {
+    const asset = symbols.find(
+      (s) => s.symbol === symbol || s.displaySymbol === symbol
+    );
+    const cat = asset ? getCategory(asset) : null;
+    const blocked =
+      isWeekend && (cat === "Currencies" || cat === "Commodities");
+    if (blocked) return; // do nothing on weekends for blocked categories
+
     const isFav = favourites.includes(symbol);
     const optimistic = isFav
       ? favourites.filter((f) => f !== symbol)
@@ -231,82 +253,53 @@ export default function MobileCoinslist() {
     );
   });
 
-  const handleCoinClick = (symbol) => {
+  // 7) Weekend alert visibility (only for Currencies & Commodities tabs)
+  useEffect(() => {
+    const isBlockedTab =
+      selectedTab === "Currencies" || selectedTab === "Commodities";
+    if (isWeekend && isBlockedTab) {
+      const key = "dismissWeekendAlertMobile";
+      const dismissed = sessionStorage.getItem(key) === "1";
+      setShowWeekendAlert(!dismissed);
+    } else {
+      setShowWeekendAlert(false);
+    }
+  }, [isWeekend, selectedTab]);
+
+  const dismissWeekendAlert = () => {
+    sessionStorage.setItem("dismissWeekendAlertMobile", "1");
+    setShowWeekendAlert(false);
+  };
+
+  const handleCoinClick = (symbol, asset) => {
+    const cat = getCategory(asset);
+    const rowDisabled =
+      isWeekend && (cat === "Currencies" || cat === "Commodities");
+    if (rowDisabled) return; // block navigation for blocked categories on weekends
     navigate(`/dashboard?symbol=${encodeURIComponent(symbol)}&mobile=true`);
   };
 
   return (
     <div className="mobile-coins-list">
       <style>{`
-        .mobile-coins-list {
-          background-color: #14151f;
-          color: white;
-          min-height: 100vh;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          padding-bottom: 64px; /* space for bottom nav */
-        }
-        .search-container {
-          padding: 16px;
-          background-color: #1e1f2a;
-          border-bottom: 1px solid #333;
-        }
-        .search-input {
-          width: 100%;
-          padding: 12px 16px;
-          background-color: #2d2f3e;
-          border: 1px solid #444;
-          border-radius: 8px;
-          color: white;
-          font-size: 16px;
-          outline: none;
-        }
+        .mobile-coins-list { background-color: #14151f; color: white; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding-bottom: 64px; }
+        .search-container { padding: 16px; background-color: #1e1f2a; border-bottom: 1px solid #333; }
+        .search-input { width: 100%; padding: 12px 16px; background-color: #2d2f3e; border: 1px solid #444; border-radius: 8px; color: white; font-size: 16px; outline: none; }
         .search-input::placeholder { color: #999; }
-        .tabs-container {
-          display: flex;
-          background-color: #1e1f2a;
-          border-bottom: 1px solid #333;
-          overflow-x: auto;
-          padding: 0 16px;
-          gap: 8px;
-        }
-        .tab {
-          padding: 14px 16px;
-          white-space: nowrap;
-          color: #999;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          border-bottom: 2px solid transparent;
-          transition: all 0.2s ease;
-          border-radius: 4px 4px 0 0;
-        }
+        .tabs-container { display: flex; background-color: #1e1f2a; border-bottom: 1px solid #333; overflow-x: auto; padding: 0 16px; gap: 8px; }
+        .tab { padding: 14px 16px; white-space: nowrap; color: #999; font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s ease; border-radius: 4px 4px 0 0; }
         .tab.active { color: white; border-bottom-color: #00e092; }
-        .assets-header {
-          display: flex;
-          padding: 12px 16px;
-          background-color: #1e1f2a;
-          border-bottom: 1px solid #333;
-          font-size: 12px;
-          color: #999;
-          font-weight: 600;
-        }
+        .alert { display: flex; gap: 8px; align-items: flex-start; margin: 12px 16px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #facc15; background: #2a260f; color: #fde68a; font-size: 13px; }
+        .assets-header { display: flex; padding: 12px 16px; background-color: #1e1f2a; border-bottom: 1px solid #333; font-size: 12px; color: #999; font-weight: 600; }
         .header-name { flex: 1; }
         .header-price, .header-change { width: 90px; text-align: right; }
         .assets-list { flex: 1; }
-        .asset-item {
-          display: flex;
-          align-items: center;
-          padding: 14px 16px;
-          border-bottom: 1px solid #2d2f3e;
-          cursor: pointer;
-          transition: background-color 0.2s ease;
-        }
+        .asset-item { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #2d2f3e; cursor: pointer; transition: background-color 0.2s ease; }
         .asset-item:hover { background-color: #1e1f2a; }
-        .favourite-btn {
-          background: none; border: none; color: #999;
-          font-size: 16px; cursor: pointer; margin-right: 12px; padding: 4px;
-        }
+        .asset-item.disabled { opacity: 0.5; cursor: not-allowed; }
+        .favourite-btn { background: none; border: none; color: #999; font-size: 16px; cursor: pointer; margin-right: 12px; padding: 4px; }
         .favourite-btn.active { color: #ffd700; }
+        .favourite-btn.disabled { cursor: not-allowed; opacity: 0.6; }
         .asset-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .asset-symbol { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
         .flags { position: relative; width: 32px; height: 18px; }
@@ -320,11 +313,7 @@ export default function MobileCoinslist() {
         .change-positive { color: #00e092; background-color: rgba(0, 224, 146, 0.1); }
         .change-negative { color: #e04d4d; background-color: rgba(224, 77, 77, 0.1); }
         .no-assets { text-align: center; padding: 40px 20px; color: #999; }
-        .bottom-navigation {
-          position: fixed; bottom: 0; left: 0; right: 0;
-          background-color: #14151f; border-top: 1px solid #333;
-          display: flex; justify-content: space-around; padding: 10px 0;
-        }
+        .bottom-navigation { position: fixed; bottom: 0; left: 0; right: 0; background-color: #14151f; border-top: 1px solid #333; display: flex; justify-content: space-around; padding: 10px 0; }
         .nav-item { display: flex; flex-direction: column; align-items: center; color: #999; text-decoration: none; font-size: 10px; cursor: pointer; }
         .nav-item.active { color: #00e092; }
         .nav-icon { font-size: 20px; margin-bottom: 4px; }
@@ -341,6 +330,43 @@ export default function MobileCoinslist() {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
+
+      {/* 🔔 Weekend Closed Alert (U.S. time) for Currencies & Commodities */}
+      {showWeekendAlert && (
+        <div role="alert" aria-live="polite" className="alert">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="currentColor"
+            aria-hidden
+          >
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-5h2v5z" />
+          </svg>
+          <div className="flex-1">
+            <strong className="font-semibold">Market Closed</strong>: Currencies
+            and commodities are not tradable on Saturdays and Sundays (U.S.
+            time).
+          </div>
+          <button
+            onClick={() => {
+              sessionStorage.setItem("dismissWeekendAlertMobile", "1");
+              setShowWeekendAlert(false);
+            }}
+            aria-label="Dismiss alert"
+            style={{
+              background: "none",
+              border: "none",
+              color: "#fde68a",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="tabs-container">
         {tabs.map((tab) => (
@@ -370,20 +396,39 @@ export default function MobileCoinslist() {
             const changeClass =
               pct >= 0 ? "change-positive" : "change-negative";
             const sign = pct > 0 ? "+" : "";
+            const cat = getCategory(asset);
+            const rowDisabled =
+              isWeekend && (cat === "Currencies" || cat === "Commodities");
 
             return (
               <div
                 key={asset.symbol}
-                className="asset-item"
-                onClick={() => handleCoinClick(asset.symbol)}
+                className={`asset-item ${rowDisabled ? "disabled" : ""}`}
+                onClick={() => handleCoinClick(asset.symbol, asset)}
+                aria-disabled={rowDisabled}
+                title={
+                  rowDisabled
+                    ? "Market closed (U.S. weekend) — selection disabled for this category"
+                    : undefined
+                }
               >
                 <button
-                  className={`favourite-btn ${isFav ? "active" : ""}`}
+                  className={`favourite-btn ${isFav ? "active" : ""} ${
+                    rowDisabled ? "disabled" : ""
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (rowDisabled) return;
                     toggleFavourite(asset.symbol);
                   }}
-                  title={isFav ? "Unfavourite" : "Favourite"}
+                  title={
+                    rowDisabled
+                      ? "Market closed (U.S. weekend) — action disabled for this category"
+                      : isFav
+                      ? "Unfavourite"
+                      : "Favourite"
+                  }
+                  aria-disabled={rowDisabled}
                 >
                   {isFav ? "★" : "☆"}
                 </button>
@@ -419,9 +464,9 @@ export default function MobileCoinslist() {
                 </div>
 
                 <div className="asset-change">
-                  <div className={`change-value ${changeClass}`}>
-                    {`${sign}${pct?.toFixed(2) || "0.00"}%`}
-                  </div>
+                  <div className={`change-value ${changeClass}`}>{`${sign}${
+                    pct?.toFixed(2) || "0.00"
+                  }%`}</div>
                 </div>
               </div>
             );
@@ -429,6 +474,7 @@ export default function MobileCoinslist() {
         )}
       </div>
 
+      {/* Bottom navigation (single instance) */}
       <div className="bottom-navigation">
         <div className="nav-item active">
           <div className="nav-icon">≡</div>
@@ -444,20 +490,8 @@ export default function MobileCoinslist() {
         </div>
       </div>
 
-      <div className="bottom-navigation">
-        <div className="nav-item active">
-          <div className="nav-icon">≡</div>
-          <div>Markets</div>
-        </div>
-        <div className="nav-item">
-          <div className="nav-icon">↗</div>
-          <div>My Trade</div>
-        </div>
-        <div className="nav-item" onClick={() => navigate("/wallet")}>
-          <div className="nav-icon">⊞</div>
-          <div>Wallet</div>
-        </div>
-      </div>
+      {/* If you're actually using Footer elsewhere, keep it; otherwise remove */}
+      {/* <Footer /> */}
     </div>
   );
 }
