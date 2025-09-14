@@ -54,6 +54,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/symbols`);
         const { symbols: raw = [] } = await res.json();
+        console.log("Fetched symbols:", raw);
         const mapped = raw.map((s) => {
           const baseCode = s.symbol.slice(0, 3);
           const quoteCode = s.symbol.slice(3, 6);
