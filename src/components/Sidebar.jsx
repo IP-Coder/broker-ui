@@ -96,22 +96,28 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
 
           let updated = { ...a };
 
-          if (data.last_price != null) {
-            const mid = parseFloat(data.last_price);
-            const init = a.initialPrice ?? mid;
-            const dir = mid > init ? "up" : mid < init ? "down" : "same";
-            const pct = data.change;
+         if (data.last_price != null) {
+           const mid = parseFloat(data.last_price);
+           const init = a.initialPrice ?? mid;
+           const dir = mid > init ? "up" : mid < init ? "down" : "same";
+           const pct = data.change_percent
+             ? parseFloat(data.change_percent)
+             : null; // null rakhenge agar data.change_percent 0 hai
 
-            updated = {
-              ...updated,
-              price: mid,
-              initialPrice: init,
-              direction: dir,
-              changePercent: pct,
-              high: a.high != null ? Math.max(a.high, mid) : mid,
-              low: a.low != null ? Math.min(a.low, mid) : mid,
-            };
-          }
+           updated = {
+             ...updated,
+             price: mid,
+             initialPrice: init,
+             direction: dir,
+             changePercent:
+               pct === null || pct === 0
+                 ? a.changePercent // purana value rakhenge
+                 : pct,
+             high: a.high != null ? Math.max(a.high, mid) : mid,
+             low: a.low != null ? Math.min(a.low, mid) : mid,
+           };
+         }
+
 
           if (data.ask != null) updated.ask = data.ask;
           if (data.bid != null) updated.bid = data.bid;
