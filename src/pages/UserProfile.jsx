@@ -580,8 +580,12 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
   const MAX_MB = 8;
   const isValidNationalId = (v) => /^[A-Za-z0-9]{6,20}$/.test(v);
 
+  const isDisabled = state.status === "approved" || state.status === "pending";
+
   async function submitKyc(e) {
     e?.preventDefault?.();
+
+    if (isDisabled) return; // block submission
 
     // Validation
     if (!isValidNationalId(nationalId)) {
@@ -599,8 +603,6 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
     try {
       setSubmitting(true);
       const fd = new FormData();
-
-      // 👇 Backend field name same rakhna hai
       fd.append("aadhaar_number", nationalId);
       fd.append("document", docFile);
 
@@ -671,6 +673,7 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
               setNationalId(e.target.value.replace(/[^A-Za-z0-9]/g, ""))
             }
             required
+            disabled={isDisabled}
           />
           <span
             className={`text-xs ${
@@ -691,11 +694,12 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
             onChange={(e) => setDocFile(e.target.files?.[0] || null)}
             className="mt-1 block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#0B1B7F] file:text-white hover:file:brightness-110"
             required
+            disabled={isDisabled}
           />
         </div>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting || isDisabled}>
             {submitting ? "Submitting..." : "Submit KYC"}
           </Button>
         </div>
@@ -703,6 +707,7 @@ function KycTab({ state, onSubmitted, onError, onRefresh }) {
     </div>
   );
 }
+
 
 
 /* ---------- keep your existing UI atoms + ReferralTab + other forms ---------- */

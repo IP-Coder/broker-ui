@@ -334,7 +334,7 @@ export default function Sidebar({ selectedSymbol, onSelectSymbol, user }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search assets"
-          className="w-full bg-[#23272F] text-sm text-white px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-[#23272F] text-sm text-white px-3 py-2 rounded focus:outline-none border border-blue-500 focus:border-blue-400 transition"
         />
       </div>
 

@@ -210,11 +210,6 @@ export default function Support() {
                 </p>
 
                 <div className="mt-4 text-sm">
-                  <div className="text-gray-400">WhatsApp</div>
-                  <div className="font-medium mt-1">{SUPPORT_WHATSAPP}</div>
-                </div>
-
-                <div className="mt-4 text-sm">
                   <div className="text-gray-400">Support hours</div>
                   <div className="font-medium mt-1">
                     Mon–Sat, 9:00–18:00 (IST)
