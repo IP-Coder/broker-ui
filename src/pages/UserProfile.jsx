@@ -307,6 +307,7 @@ export default function UserProfile() {
                   <h3 className="text-lg font-bold mb-3">Personal details</h3>
                   <Field>
                     <Input
+                      className="mb-1"
                       placeholder="First name"
                       value={profile.first_name}
                       onChange={(e) => update("first_name", e.target.value)}
@@ -314,6 +315,7 @@ export default function UserProfile() {
                   </Field>
                   <Field>
                     <Input
+                      className="mt-1"
                       placeholder="Last name"
                       value={profile.last_name}
                       onChange={(e) => update("last_name", e.target.value)}
@@ -365,6 +367,7 @@ export default function UserProfile() {
                   <h3 className="text-lg font-bold mb-3">Address</h3>
                   <Field>
                     <Input
+                      className="mb-1"
                       placeholder="Street / Address"
                       value={profile.address_line}
                       onChange={(e) => update("address_line", e.target.value)}
@@ -372,6 +375,7 @@ export default function UserProfile() {
                   </Field>
                   <div className="grid grid-cols-3 gap-2">
                     <Input
+                      className="mt-1"
                       placeholder="Postal code"
                       value={profile.postal_code}
                       onChange={(e) => update("postal_code", e.target.value)}

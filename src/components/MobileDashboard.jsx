@@ -938,6 +938,7 @@ export default function MobileDashboard({
           .controls {
             padding: 10px 8px;
             gap: 8px;
+            margin-bottom: 110px;
           }
           .sell,
           .buy {
