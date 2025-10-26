@@ -33,11 +33,14 @@ export default function Login() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [refCode, setRefCode] = useState("");
+  const [agentCode, setAgentCode] = useState("");
   useEffect(() => {
     const path = (location.pathname || "").toLowerCase();
     const ref = searchParams.get("ref");
+    const agent_code = searchParams.get("agent");
+    if (agent_code) setAgentCode(agent_code);
     if (ref) setRefCode(ref);
-    if (path.includes("/register") || ref) {
+    if (path.includes("/register") || ref || agent_code) {
       setMode("signup");
     }
   }, [location.pathname, location.search, searchParams]);
@@ -79,6 +82,7 @@ export default function Login() {
         password_confirmation: signupPassword,
         account_type: accountType, // 'demo' | 'live'
         referral_code: refCode || undefined,
+        agent_code: agentCode || undefined,
       });
 
       if (data?.token) {
