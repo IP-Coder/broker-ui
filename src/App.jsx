@@ -17,6 +17,7 @@ import Support from "./pages/Support";
 import MobileCoinslist from "./components/MobileCoinslist";
 import MobileWallet from "./components/MobileWallet";
 import { useMobile } from "./hooks/useMobile";
+import UnderConstruction from "./pages/underconstruction";
 
 export default function App() {
   const isAuthenticated = !!localStorage.getItem("token");
@@ -29,6 +30,10 @@ export default function App() {
           {/* Default redirect */}
           <Route
             path="/"
+            element={<UnderConstruction />}
+          />
+          {/* <Route
+            path="/"
             element={
               isAuthenticated ? (
                 <Navigate to={isMobile ? "/markets" : "/dashboard"} replace />
@@ -37,8 +42,7 @@ export default function App() {
               )
             }
           />
-
-          {/* Protected routes */}
+          {/* Protected routes 
           <Route
             path="/markets"
             element={
@@ -96,9 +100,9 @@ export default function App() {
             }
           />
 
-          {/* Public routes */}
+          {/* Public routes 
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<Register />} /> */}
 
           {/* Catch all - 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
