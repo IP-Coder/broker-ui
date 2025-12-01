@@ -28,11 +28,11 @@ export default function App() {
       <ErrorBoundary>
         <Routes>
           {/* Default redirect */}
-          <Route
+          {/* <Route
             path="/"
             element={<UnderConstruction />}
-          />
-          {/* <Route
+          /> */}
+         <Route
             path="/"
             element={
               isAuthenticated ? (
@@ -42,7 +42,7 @@ export default function App() {
               )
             }
           />
-          {/* Protected routes 
+          {/* Protected routes */}
           <Route
             path="/markets"
             element={
@@ -100,9 +100,9 @@ export default function App() {
             }
           />
 
-          {/* Public routes 
+          {/* Public routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} /> */}
+          <Route path="/register" element={<Register />} /> 
 
           {/* Catch all - 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
